@@ -1,0 +1,8 @@
+node_modules/
+.env
+cookies.json
+estado.json
+debug.png
+diagnostico.png
+ss_bot.png
+bot.log

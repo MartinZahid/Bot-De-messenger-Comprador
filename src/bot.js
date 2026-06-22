@@ -145,14 +145,19 @@ async function cicloPrincipal() {
         if (c.esPropio) {
           state.processed.set(c.nombre, hash(`${c.nombre}|${c.ultimo}`));
         }
+        if (c.esHumano) {
+          state.humanHandled.add(c.nombre);
+        }
       }
       state.bootstrapDone = true;
-      console.log(`✅ Bootstrap: ${state.processed.size} propias marcadas`);
+      console.log(`✅ Bootstrap: ${state.processed.size} propias, ${state.humanHandled.size} con respuesta humana`);
       return;
     }
 
     for (const conv of conversaciones) {
       if (conv.esPropio || conv.esSistema || conv.esSticker) continue;
+      if (state.humanHandled.has(conv.nombre)) continue;
+      if (conv.esHumano) { state.humanHandled.add(conv.nombre); continue; }
       const clave = hash(`${conv.nombre}|${conv.ultimo}`);
       if (state.processed.get(conv.nombre) === clave) continue;
       state.processed.set(conv.nombre, clave);

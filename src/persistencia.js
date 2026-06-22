@@ -11,6 +11,7 @@ async function guardarEstado() {
     const data = {
       processed: Array.from(state.processed.entries()),
       historial: Array.from(state.historial.entries()),
+      humanHandled: Array.from(state.humanHandled),
       bootstrapDone: state.bootstrapDone,
       timestamp: new Date().toISOString(),
     };
@@ -33,7 +34,10 @@ async function cargarEstado() {
     if (data.bootstrapDone !== undefined) {
       state.bootstrapDone = data.bootstrapDone;
     }
-    console.log(`📦 Estado cargado: ${state.processed.size} procesados, ${state.historial.size} historiales`);
+    if (data.humanHandled) {
+      state.humanHandled = new Set(data.humanHandled);
+    }
+    console.log(`📦 Estado cargado: ${state.processed.size} procesados, ${state.historial.size} historiales, ${state.humanHandled.size} con respuesta humana`);
     return true;
   } catch (err) {
     if (err.code !== 'ENOENT') {

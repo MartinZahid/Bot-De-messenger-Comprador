@@ -9,4 +9,5 @@ module.exports = {
   bootstrapDone: false,
   processed: new Map(),
   historial: new Map(),
+  humanHandled: new Set(),
 };

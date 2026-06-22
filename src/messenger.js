@@ -26,6 +26,7 @@ async function obtenerConversaciones() {
         if (t.includes('consejos de seguridad') || t.includes('reunir con alguien en persona')) return false;
         return true;
       });
+      const esHumano = textos.some(t => t.startsWith('Tú:') || t.startsWith('You:'));
       const esPropio = ultimo
         ? ultimo.startsWith('Tú:') || ultimo.startsWith('You:')
         : false;
@@ -41,6 +42,7 @@ async function obtenerConversaciones() {
         ultimo: ultimo || preview,
         indice: idx,
         esPropio,
+        esHumano,
         esSistema,
         esSticker,
       };

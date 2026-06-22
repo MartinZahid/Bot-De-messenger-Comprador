@@ -5,7 +5,7 @@ const { POLL_MS, GROQ_MODEL, SEL, sleep, rnd, hash } = require('./config');
 const { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada } = require('./browser');
 const { obtenerConversaciones, scrapearMensajes, enviarMensaje, clickMarketplaceTab } = require('./messenger');
 const { consultarGroq } = require('./groq');
-const { sendTelegram } = require('./telegram');
+const { sendTelegram, autoDetectarChatId } = require('./telegram');
 const { iniciarServidor } = require('./server');
 const { guardarEstado, cargarEstado } = require('./persistencia');
 
@@ -207,6 +207,7 @@ async function start() {
 
   try {
     await cargarEstado();
+    await autoDetectarChatId();
     await iniciarBrowser();
     iniciarServidor();
     setTimeout(async () => {

@@ -23,6 +23,7 @@ async function obtenerConversaciones() {
         if (/^[·\-—\s]+$/.test(t)) return false;
         if (/reaccionó a (tu|su|mi) mensaje/i.test(t)) return false;
         if (/reaccionó a/i.test(t)) return false;
+        if (t.includes('consejos de seguridad') || t.includes('reunir con alguien en persona')) return false;
         return true;
       });
       const esPropio = ultimo

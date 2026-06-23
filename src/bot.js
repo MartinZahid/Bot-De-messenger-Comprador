@@ -2,10 +2,10 @@
 
 const state = require('./state');
 const { POLL_MS, GROQ_MODEL, SEL, sleep, rnd, hash } = require('./config');
-const { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada } = require('./browser');
+const { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, guardarCookies } = require('./browser');
 const { obtenerConversaciones, scrapearMensajes, enviarMensaje, clickMarketplaceTab } = require('./messenger');
 const { consultarGroq } = require('./groq');
-const { sendTelegram, autoDetectarChatId } = require('./telegram');
+const { sendTelegram, autoDetectarChatId, enviarAlerta } = require('./telegram');
 const { iniciarServidor } = require('./server');
 const { guardarEstado, cargarEstado } = require('./persistencia');
 
@@ -129,6 +129,7 @@ async function cicloPrincipal() {
   try {
     if (await detectarSesionExpirada()) {
       console.log('🔄 Sesión expirada, reiniciando navegador...');
+      await enviarAlerta('Sesión expirada', 'El bot se reinició automáticamente pero necesita cookies nuevas.');
       await reiniciarBrowser();
       return;
     }
@@ -176,6 +177,7 @@ async function cicloPrincipal() {
     }
 
     guardarEstado();
+    guardarCookies();
   } catch (err) {
     console.error('❌ Error en ciclo principal:', err.message);
     if (

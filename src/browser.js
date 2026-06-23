@@ -128,6 +128,18 @@ async function reiniciarBrowser() {
   }
 }
 
+async function guardarCookies() {
+  const { page } = state;
+  if (!page || page.isClosed()) return;
+  try {
+    const cookies = await page.cookies();
+    const raw = JSON.stringify(cookies, null, 2);
+    await fs.writeFile(COOKIES_PATH, raw, 'utf8');
+  } catch (err) {
+    console.error('⚠ Error guardando cookies:', err.message);
+  }
+}
+
 async function detectarSesionExpirada() {
   const { page } = state;
   if (!page || page.isClosed()) return false;
@@ -165,4 +177,4 @@ async function configurarMutationObserver() {
   }
 }
 
-module.exports = { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, configurarMutationObserver };
+module.exports = { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, configurarMutationObserver, guardarCookies };

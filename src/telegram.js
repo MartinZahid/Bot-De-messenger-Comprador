@@ -49,4 +49,19 @@ async function autoDetectarChatId() {
   }
 }
 
-module.exports = { sendTelegram, autoDetectarChatId };
+async function enviarAlerta(asunto, mensaje) {
+  if (!TOKEN || !chatIdActual) return;
+  try {
+    await axios.post(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+      chat_id: chatIdActual,
+      text: `⚠️ *${asunto}*\n${mensaje}\n🕐 ${new Date().toLocaleString('es-MX')}`,
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true,
+    });
+    console.log(`📲 Alerta Telegram enviada: ${asunto}`);
+  } catch (err) {
+    console.error('⚠ Error al enviar alerta Telegram:', err.message);
+  }
+}
+
+module.exports = { sendTelegram, autoDetectarChatId, enviarAlerta };

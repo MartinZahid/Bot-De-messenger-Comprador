@@ -193,17 +193,17 @@ async function cicloPrincipal() {
       if (pendientes.length >= BATCH_SIZE) break;
     }
 
-    let algunaProcesada = false;
+    let algunCompradorDetectado = false;
     for (const conv of pendientes) {
       const esComprador = await procesarConversacion(conv);
-      if (esComprador) algunaProcesada = true;
+      if (esComprador) algunCompradorDetectado = true;
     }
 
     if (pendientes.length > 0) {
       console.log(`📊 Procesadas ${pendientes.length} conversación(es) de ${conversaciones.length} totales`);
     }
 
-    if (!algunaProcesada && pendientes.length === 0) {
+    if (!algunCompradorDetectado && pendientes.length === 0) {
       if (!state.idle) {
         state.idle = true;
         console.log('💤 Sin mensajes nuevos. Modo reposo');

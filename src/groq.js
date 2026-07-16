@@ -174,7 +174,8 @@ async function consultarGroq(nombre, nuevoMensaje) {
       }
 
       if (parsed.action === 'ignore') {
-        const respuestaForzada = detectarPreguntaDirecta(nuevoMensaje, nuevoMensaje);
+        const ultimaLineaComprador = nuevoMensaje.split('\n').reverse().find(l => l.startsWith('Comprador:')) || '';
+        const respuestaForzada = detectarPreguntaDirecta(ultimaLineaComprador, nuevoMensaje);
         if (respuestaForzada) {
           console.log(`⚠ Groq ignoró, pero se detectó pregunta directa. Forzando reply.`);
           parsed.action = 'reply';

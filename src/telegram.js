@@ -3,12 +3,20 @@
 const axios = require('axios');
 const { TOKEN, CHAT_ID } = require('./config');
 
+/** @type {string|null} Chat ID actual de Telegram (auto-detectado o del .env). */
 let chatIdActual = CHAT_ID;
 
+/**
+ * Envía una notificación de comprador interesado a Telegram.
+ *
+ * @param {string} nombre - Nombre del comprador.
+ * @param {string} preview - Preview del último mensaje.
+ * @returns {Promise<boolean>} true si se envió correctamente.
+ */
 async function sendTelegram(nombre, preview) {
   if (!TOKEN || !chatIdActual) {
     console.warn('⚠ TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no configurados');
-    return;
+    return false;
   }
   try {
     await axios.post(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
@@ -18,11 +26,19 @@ async function sendTelegram(nombre, preview) {
       disable_web_page_preview: true,
     });
     console.log(`📲 Notificación Telegram enviada: ${nombre}`);
+    return true;
   } catch (err) {
-    console.error('⚠ Error al enviar Telegram:', err.message);
+    console.error(`⚠ Error al enviar Telegram: ${err.message}`);
+    return false;
   }
 }
 
+/**
+ * Detecta automáticamente el chat ID de Telegram a partir de los últimos updates.
+ * Útil si el usuario no configuró TELEGRAM_CHAT_ID en .env pero ya envió /start al bot.
+ *
+ * @returns {Promise<boolean>} true si se detectó o confirmó el chat ID.
+ */
 async function autoDetectarChatId() {
   if (!TOKEN) return false;
   try {
@@ -44,13 +60,20 @@ async function autoDetectarChatId() {
     }
     return false;
   } catch (err) {
-    console.error('⚠ Error detectando chat ID:', err.message);
+    console.error(`⚠ Error detectando chat ID: ${err.message}`);
     return false;
   }
 }
 
+/**
+ * Envía una alerta del sistema (sesión expirada, errores, etc.) a Telegram.
+ *
+ * @param {string} asunto - Título de la alerta.
+ * @param {string} mensaje - Cuerpo del mensaje.
+ * @returns {Promise<boolean>} true si se envió correctamente.
+ */
 async function enviarAlerta(asunto, mensaje) {
-  if (!TOKEN || !chatIdActual) return;
+  if (!TOKEN || !chatIdActual) return false;
   try {
     await axios.post(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
       chat_id: chatIdActual,
@@ -59,8 +82,10 @@ async function enviarAlerta(asunto, mensaje) {
       disable_web_page_preview: true,
     });
     console.log(`📲 Alerta Telegram enviada: ${asunto}`);
+    return true;
   } catch (err) {
-    console.error('⚠ Error al enviar alerta Telegram:', err.message);
+    console.error(`⚠ Error al enviar alerta Telegram: ${err.message}`);
+    return false;
   }
 }
 

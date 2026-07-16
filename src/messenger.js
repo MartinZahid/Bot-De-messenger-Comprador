@@ -4,6 +4,24 @@ const path = require('path');
 const state = require('./state');
 const { SEL, SISTEMA, sleep, rnd } = require('./config');
 
+/**
+ * @typedef {Object} Conversacion
+ * @property {string} nombre - Nombre del contact/usuario.
+ * @property {string} preview - Preview del último mensaje visible en el sidebar.
+ * @property {string} ultimo - Último mensaje relevante (sin timestamps ni reacciones).
+ * @property {number} indice - Índice del enlace en el DOM.
+ * @property {boolean} esPropio - true si el último mensaje es nuestro (Tú:/You:).
+ * @property {boolean} esHumano - true si hay algún mensaje "Tú:" o "You:" en la conversación.
+ * @property {boolean} esSistema - true si el último mensaje es del sistema de Marketplace.
+ * @property {boolean} esSticker - true si el último mensaje es un sticker/emoji.
+ */
+
+/**
+ * Obtiene la lista de conversaciones visibles en el sidebar de Marketplace.
+ * Extrae nombre, preview, último mensaje relevante y clasifica cada una.
+ *
+ * @returns {Promise<Conversacion[]>} Lista de conversaciones filtradas.
+ */
 async function obtenerConversaciones() {
   const { page } = state;
   return await page.evaluate((linkSelector, spanSelector, palabrasSistema) => {
@@ -50,12 +68,19 @@ async function obtenerConversaciones() {
       if (!c.nombre) return false;
       const n = c.nombre.toLowerCase();
       if (palabrasSistema.some(p => n.includes(p))) return false;
-      if (!c.nombre.includes(' \u00B7 ')) return false;
+      if (!c.nombre.includes(' · ')) return false;
       return true;
     });
   }, SEL.CONV_LINK, SEL.SPANS, SISTEMA);
 }
 
+/**
+ * Scrapea los mensajes visibles del chat actual.
+ * Identifica al vendedor (justify-content: flex-end) vs comprador
+ * y retorna un historial con prefijos "Vendedor:" / "Comprador:".
+ *
+ * @returns {Promise<string[]>} Lista de mensajes formateados (últimos 15).
+ */
 async function scrapearMensajes() {
   const { page } = state;
   await sleep(1000);
@@ -63,8 +88,10 @@ async function scrapearMensajes() {
     await page.waitForFunction(() => {
       const m = document.querySelector('[role="main"], [role="region"], [role="grid"]');
       return m && m.offsetParent !== null;
-    }, { timeout: 8000 }).catch(() => {});
-  } catch {}
+    }, { timeout: 8000 });
+  } catch (e) {
+    console.warn(`⚠ Timeout esperando área de mensajes: ${e.message}`);
+  }
 
   if (page.isClosed()) return [];
 
@@ -102,9 +129,18 @@ async function scrapearMensajes() {
     }
 
     return mensajes.slice(-15);
-  }).catch(() => []);
+  }).catch(e => {
+    console.warn(`⚠ Error scrapeando mensajes: ${e.message}`);
+    return [];
+  });
 }
 
+/**
+ * Busca el cuadro de texto de Mensaje en el DOM usando múltiples selectores.
+ * Primero intenta por selector CSS, luego por evaluate como fallback.
+ *
+ * @returns {Promise<import('puppeteer').ElementHandle|null>} Elemento encontrado o null.
+ */
 async function encontrarInput() {
   const { page } = state;
 
@@ -115,6 +151,8 @@ async function encontrarInput() {
       pin.closest('[role="dialog"]')?.remove();
       pin.closest('[role="presentation"]')?.remove();
     }
+  }).catch(e => {
+    console.warn(`⚠ Error removiendo PIN overlay: ${e.message}`);
   });
 
   for (const sel of SEL.INPUT) {
@@ -132,15 +170,32 @@ async function encontrarInput() {
       if (el.offsetParent !== null) return el;
     }
     return null;
-  }).then(el => el || null);
+  }).then(el => el || null).catch(e => {
+    console.warn(`⚠ Error en fallback encontrarInput: ${e.message}`);
+    return null;
+  });
 }
 
+/**
+ * Envía un mensaje de texto en la conversación actual.
+ * Usa 3 estrategias en cascada:
+ * 1. Click en botón "Enviar" por selector CSS
+ * 2. Click por aria-label en evaluate
+ * 3. Presionar Enter
+ *
+ * @param {string} texto - Mensaje a enviar.
+ * @returns {Promise<boolean>} true si se envió (o al menos se intentó).
+ */
 async function enviarMensaje(texto) {
   const { page } = state;
   const input = await encontrarInput();
   if (!input) {
     console.error('❌ No se encontró el cuadro de texto');
-    await page.screenshot({ path: path.join(__dirname, '..', 'debug.png'), fullPage: false });
+    try {
+      await page.screenshot({ path: path.join(__dirname, '..', 'debug.png'), fullPage: false });
+    } catch (e) {
+      console.warn(`⚠ No se pudo tomar screenshot de debug: ${e.message}`);
+    }
     return false;
   }
 
@@ -161,7 +216,9 @@ async function enviarMensaje(texto) {
         return true;
       }
     }
-  } catch {}
+  } catch (e) {
+    console.warn(`⚠ Estrategia 1 (send button) falló: ${e.message}`);
+  }
 
   // Estrategia 2: buscar por aria-label en evaluate
   const clicked = await page.evaluate(() => {
@@ -174,6 +231,9 @@ async function enviarMensaje(texto) {
         return true;
       }
     }
+    return false;
+  }).catch(e => {
+    console.warn(`⚠ Estrategia 2 (evaluate) falló: ${e.message}`);
     return false;
   });
 
@@ -192,6 +252,9 @@ async function enviarMensaje(texto) {
   return true;
 }
 
+/**
+ * Hace click en la pestaña de Marketplace dentro del sidebar de Messenger.
+ */
 async function clickMarketplaceTab() {
   const { page } = state;
   await page.evaluate(() => {
@@ -204,6 +267,8 @@ async function clickMarketplaceTab() {
       }
     }
     return false;
+  }).catch(e => {
+    console.warn(`⚠ Error clickeando tab Marketplace: ${e.message}`);
   });
   await sleep(2000);
 }

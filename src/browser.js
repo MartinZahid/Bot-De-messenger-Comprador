@@ -5,9 +5,17 @@ const fs = require('fs').promises;
 const state = require('./state');
 const { COOKIES_PATH, SEL, sleep } = require('./config');
 
+/**
+ * Lanza Chromium headless, carga cookies de messenger.com y navega
+ * a la bandeja de entrada. Marca state.ready = true al completar.
+ *
+ * @throws {Error} Si las cookies no existen o la sesión está expirada.
+ */
 async function iniciarBrowser() {
   if (state.browser) {
-    try { await state.browser.close(); } catch { /* ok */ }
+    try { await state.browser.close(); } catch (e) {
+      console.warn(`⚠ Error cerrando browser anterior: ${e.message}`);
+    }
   }
 
   console.log('🚀 Iniciando Chromium...');
@@ -80,6 +88,10 @@ async function iniciarBrowser() {
   state.ready = true;
 }
 
+/**
+ * Cierra diálogos modales de Messenger (popups de bienvenida, restaurar mensajes, etc.)
+ * Usa 3 estrategias: click en botón Cerrar, click en "No restaurar", y eliminación forzada del DOM.
+ */
 async function cerrarDialogos() {
   const { page } = state;
   if (!page) return;
@@ -118,16 +130,23 @@ async function cerrarDialogos() {
   await sleep(500);
 }
 
+/**
+ * Reinicia el navegador cerrando el actual y relanzando.
+ * Marca state.ready = false durante la transición.
+ */
 async function reiniciarBrowser() {
   console.log('🔄 Reiniciando navegador...');
   state.ready = false;
   try {
     await iniciarBrowser();
   } catch (e) {
-    console.error('Reintento falló:', e.message);
+    console.error('❌ Reintento de browser falló:', e.message);
   }
 }
 
+/**
+ * Guarda las cookies actuales de la sesión a cookies.json.
+ */
 async function guardarCookies() {
   const { page } = state;
   if (!page || page.isClosed()) return;
@@ -136,10 +155,16 @@ async function guardarCookies() {
     const raw = JSON.stringify(cookies, null, 2);
     await fs.writeFile(COOKIES_PATH, raw, 'utf8');
   } catch (err) {
-    console.error('⚠ Error guardando cookies:', err.message);
+    console.warn(`⚠ Error guardando cookies: ${err.message}`);
   }
 }
 
+/**
+ * Detecta si la sesión de Facebook/Messenger ha expirado
+ * verificando si la URL contiene 'login' o 'checkpoint'.
+ *
+ * @returns {Promise<boolean>} true si la sesión expiró.
+ */
 async function detectarSesionExpirada() {
   const { page } = state;
   if (!page || page.isClosed()) return false;
@@ -150,11 +175,16 @@ async function detectarSesionExpirada() {
       return true;
     }
     return false;
-  } catch {
+  } catch (e) {
+    console.warn(`⚠ No se pudo verificar sesión: ${e.message}`);
     return false;
   }
 }
 
+/**
+ * Configura un MutationObserver en el DOM que elimina automáticamente
+ * los diálogos modales cuando aparecen (popups persistentes de Messenger).
+ */
 async function configurarMutationObserver() {
   const { page } = state;
   if (!page) return;
@@ -173,7 +203,7 @@ async function configurarMutationObserver() {
     });
     console.log('🔍 MutationObserver para diálogos activo');
   } catch (err) {
-    console.log('⚠ No se pudo configurar MutationObserver:', err.message);
+    console.warn(`⚠ No se pudo configurar MutationObserver: ${err.message}`);
   }
 }
 

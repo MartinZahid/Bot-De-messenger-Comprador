@@ -1,7 +1,10 @@
 'use strict';
 
 const state = require('./state');
-const { POLL_MS, GROQ_MODEL, SEL, sleep, rnd, hash } = require('./config');
+const {
+  POLL_MS, IDLE_MS, GROQ_MODEL, BATCH_SIZE,
+  SEL, sleep, rnd, hash,
+} = require('./config');
 const { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, guardarCookies } = require('./browser');
 const { obtenerConversaciones, scrapearMensajes, enviarMensaje, clickMarketplaceTab } = require('./messenger');
 const { consultarGroq } = require('./groq');
@@ -11,6 +14,15 @@ const { guardarEstado, cargarEstado } = require('./persistencia');
 
 let idleTimeout = null;
 
+/**
+ * Ejecuta page.evaluate de forma segura, reintenta una vez si detecta
+ * frame detachado (error común en Puppeteer con SPAs).
+ *
+ * @param {import('puppeteer').Page} page - Página de Puppeteer.
+ * @param {Function} fn - Función a evaluar en el navegador.
+ * @param {...any} args - Argumentos para la función.
+ * @returns {Promise<any>} Resultado de page.evaluate.
+ */
 async function safeEvaluate(page, fn, ...args) {
   if (!page || page.isClosed()) throw new Error('Page is closed');
   try {
@@ -27,6 +39,10 @@ async function safeEvaluate(page, fn, ...args) {
   }
 }
 
+/**
+ * Navega a la vista de Marketplace dentro de Messenger.
+ * Cierra diálogos persistentes y verifica que los enlaces de conversación carguen.
+ */
 async function navegarAMarketplace() {
   const { page } = state;
   const url = page.url();
@@ -70,6 +86,13 @@ async function navegarAMarketplace() {
   console.log(`🔗 Enlaces de conversaciones encontrados: ${totalEnlaces}`);
 }
 
+/**
+ * Procesa una única conversación: navega al chat, scrapea mensajes,
+ * consulta a Groq y envía respuesta si corresponde.
+ *
+ * @param {{nombre: string, preview: string, indice: number}} conv - Conversación a procesar.
+ * @returns {Promise<boolean>} true si se procesó un comprador real.
+ */
 async function procesarConversacion({ nombre, preview, indice }) {
   const { page } = state;
   console.log(`🔍 Procesando: ${nombre} — "${preview.slice(0, 80)}"`);
@@ -96,7 +119,7 @@ async function procesarConversacion({ nombre, preview, indice }) {
       console.log(`📜 ${mensajesChat.length} mensajes scrapeados del chat`);
     }
   } catch (e) {
-    console.log('⚠ No se pudieron scrapear mensajes, usando preview');
+    console.log(`⚠ No se pudieron scrapear mensajes: ${e.message}`);
   }
 
   const decision = await consultarGroq(nombre, contexto);
@@ -122,6 +145,11 @@ async function procesarConversacion({ nombre, preview, indice }) {
   return false;
 }
 
+/**
+ * Ciclo principal de polling. Obtiene conversaciones del sidebar,
+ * filtra las que ya fueron procesadas y procesa hasta BATCH_SIZE
+ * conversaciones nuevas por ciclo.
+ */
 async function cicloPrincipal() {
   if (state.busy || !state.ready) return;
   state.busy = true;
@@ -139,8 +167,6 @@ async function cicloPrincipal() {
     const conversaciones = await obtenerConversaciones();
     console.log(`📋 ${conversaciones.length} conversaciones visibles`);
 
-    let algunaProcesada = false;
-
     if (!state.bootstrapDone) {
       for (const c of conversaciones) {
         if (c.esPropio) {
@@ -155,6 +181,7 @@ async function cicloPrincipal() {
       return;
     }
 
+    const pendientes = [];
     for (const conv of conversaciones) {
       if (conv.esPropio || conv.esSistema || conv.esSticker) continue;
       if (state.humanHandled.has(conv.nombre)) continue;
@@ -162,12 +189,21 @@ async function cicloPrincipal() {
       const clave = hash(`${conv.nombre}|${conv.ultimo}`);
       if (state.processed.get(conv.nombre) === clave) continue;
       state.processed.set(conv.nombre, clave);
-      await procesarConversacion(conv);
-      algunaProcesada = true;
-      break;
+      pendientes.push(conv);
+      if (pendientes.length >= BATCH_SIZE) break;
     }
 
-    if (!algunaProcesada) {
+    let algunaProcesada = false;
+    for (const conv of pendientes) {
+      const esComprador = await procesarConversacion(conv);
+      if (esComprador) algunaProcesada = true;
+    }
+
+    if (pendientes.length > 0) {
+      console.log(`📊 Procesadas ${pendientes.length} conversación(es) de ${conversaciones.length} totales`);
+    }
+
+    if (!algunaProcesada && pendientes.length === 0) {
       if (!state.idle) {
         state.idle = true;
         console.log('💤 Sin mensajes nuevos. Modo reposo');
@@ -192,8 +228,12 @@ async function cicloPrincipal() {
   }
 }
 
+/**
+ * Programa el siguiente ciclo con delay adaptivo:
+ * POLL_MS cuando hay actividad, IDLE_MS cuando está en reposo.
+ */
 function programarSiguiente() {
-  const delay = state.idle ? 300000 : POLL_MS;
+  const delay = state.idle ? IDLE_MS : POLL_MS;
   idleTimeout = setTimeout(async () => {
     try {
       await cicloPrincipal();
@@ -204,6 +244,10 @@ function programarSiguiente() {
   }, delay);
 }
 
+/**
+ * Punto de entrada del bot. Carga estado persistido, detecta chat de Telegram,
+ * inicia Chromium, lanza servidor Express y arranca el loop de polling.
+ */
 async function start() {
   process.on('unhandledRejection', err => {
     console.error('⚠ Unhandled Rejection:', err.message);
@@ -220,8 +264,8 @@ async function start() {
     setTimeout(async () => {
       await cicloPrincipal();
       programarSiguiente();
-      const modo = state.idle ? '5 min' : `${POLL_MS / 1000}s`;
-      console.log(`⏱ Monitor iniciado (modo: ${modo}) usando ${GROQ_MODEL || 'default'}`);
+      const modo = state.idle ? `${IDLE_MS / 1000}s (reposo)` : `${POLL_MS / 1000}s (activo)`;
+      console.log(`⏱ Monitor iniciado (modo: ${modo}) usando ${GROQ_MODEL || 'default'} | batch: ${BATCH_SIZE}`);
     }, 3000);
   } catch (err) {
     console.error('💥 Error fatal al iniciar:', err);

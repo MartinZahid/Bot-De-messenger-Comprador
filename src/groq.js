@@ -38,8 +38,12 @@ const REGLAS_PREGUNTAS = [
   },
   {
     test: /\b(ubicación|dirección|donde|dónde|zona|colonia|estás)\b/i,
-    msg: 'Estoy al sur de la ciudad, pero hago envíos. ¿De dónde eres?',
+    msg: 'Estoy al sur de la ciudad, pero hago envíos dependiendo de la zona. Mi número es 6371005468 para coordinar. ¿De dónde eres?',
     requiresContext: true,
+  },
+  {
+    test: /\b(numero|número|telefono|teléfono|whatsapp|wsp|contacto|cel|celular)\b/i,
+    msg: 'Claro, mi número es 6371005468. Escríbeme por ahí también. ¿De dónde eres?',
   },
   {
     test: /\b(foto|fotos|imagen|imágenes|ver|muestra|enseña|mostrar)\b/i,
@@ -47,7 +51,7 @@ const REGLAS_PREGUNTAS = [
   },
   {
     test: /\b(envío|envias|domicilio|enviaste|mandas|mandar|envío|envías)\b/i,
-    msg: 'Sí, hago envíos a domicilio según la zona. ¿De dónde eres?',
+    msg: 'Sí, hago envíos a domicilio, depende de tu ubicación. ¿De dónde eres?',
   },
   {
     test: /\b(funciona|sirve|como funciona|características|especificaciones|modelo|marca|estado|usado|nuevo)\b/i,

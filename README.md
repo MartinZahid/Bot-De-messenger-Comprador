@@ -84,6 +84,7 @@ Edita `src/config.js` (`DECISION_RULES` y `BUSINESS_RULES`) para ajustar el comp
 
 - Envíos a domicilio según zona del comprador
 - Precio: si la tarjetita tiene precio detectado, lo dice directo; si no, "El precio es el mismo que está en la publicación". **Nunca inventa precios.**
+- Medidas/dimensiones (mide, tamaño, alto, ancho, largo): **no responde automáticamente** y te envía un aviso por WhatsApp ("Pregunta de medidas") para que lo manejes tú
 - Comparte `CONTACTO_NUMERO` y marca `is_buyer=true` cuando el comprador lo pide
 - Si la venta ya se concretó o el comprador envió su dirección, deja de responder (siempre `ignore`)
 

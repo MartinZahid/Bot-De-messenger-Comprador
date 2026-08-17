@@ -138,6 +138,12 @@ async function procesarConversacion({ nombre, preview, indice }) {
 
   const decision = await consultarGroq(nombre, contexto);
 
+  if (decision.notificar) {
+    console.log(`📏 ${nombre} pregunta por medidas. Avisando al vendedor...`);
+    await enviarAlerta('Pregunta de medidas', `👤 ${nombre}\n💬 ${preview}`);
+    return true;
+  }
+
   if (decision.action === 'reply' && decision.message) {
     console.log(`✅ Groq decide responder: "${decision.message.slice(0, 80)}..."`);
     const enviado = await enviarMensaje(decision.message);

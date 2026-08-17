@@ -62,10 +62,6 @@ const REGLAS_PREGUNTAS = [
     test: /\b(funciona|sirve|como funciona|características|especificaciones|modelo|marca|estado|usado|nuevo)\b/i,
     msg: 'Funciona bien. Si tienes alguna duda específica, dime y te respondo.',
   },
-  {
-    test: /\b(medidas|tamaño|peso|dimensiones|grande|chico|color)\b/i,
-    msg: 'Las especificaciones están en la publicación. ¿Alguna duda en particular?',
-  },
 ];
 
 /**
@@ -149,6 +145,36 @@ function detectarPreguntaDirecta(texto, historialRaw, precioDetectado) {
   return null;
 }
 
+/** Patrones de preguntas sobre medidas/dimensiones que el vendedor responde personalmente. */
+const REGEX_MEDIDAS = /\b(cuanto mide|cuánto mide|mide|miden|medidas|tamaño|tamaños|dimensiones|alto|ancho|largo)\b/i;
+
+/**
+ * Detecta si el último mensaje del comprador pregunta por medidas o
+ * dimensiones del producto. En ese caso el bot NO responde y avisa al
+ * vendedor para que lo maneje personalmente.
+ * @param {string} texto - Último mensaje del comprador.
+ * @returns {boolean} true si pregunta por medidas.
+ */
+function detectarPreguntaMedidas(texto) {
+  if (!texto) return false;
+  return REGEX_MEDIDAS.test(texto);
+}
+
+/**
+ * Extrae la última línea del comprador del historial scrapeado.
+ * @param {string} historialRaw - Texto completo del historial.
+ * @returns {string} Última línea del comprador (o cadena vacía).
+ */
+function ultimaLineaComprador(historialRaw) {
+  const lineas = historialRaw.split('\n');
+  for (let i = lineas.length - 1; i >= 0; i--) {
+    if (lineas[i].startsWith('Comprador:')) {
+      return lineas[i].replace(/^Comprador:\s*/, '');
+    }
+  }
+  return '';
+}
+
 /**
  * Consulta a Groq con backoff exponencial en caso de error.
  *
@@ -160,6 +186,13 @@ async function consultarGroq(nombre, nuevoMensaje) {
   const historialConv = state.historial.get(nombre) || [];
   const publicacion = state.publicaciones.get(nombre) || null;
   const precioDetectado = publicacion && publicacion.precio ? publicacion.precio : '';
+
+  if (detectarPreguntaMedidas(ultimaLineaComprador(nuevoMensaje))) {
+    console.log(`📏 ${nombre} pregunta por medidas. Sin respuesta automática; se avisa al vendedor.`);
+    historialConv.push({ role: 'user', content: nuevoMensaje });
+    state.historial.set(nombre, historialConv);
+    return { action: 'ignore', message: '', isBuyer: false, notificar: true };
+  }
 
   const contextoPublicacion = publicacion && publicacion.titulo
     ? `Publicación: ${publicacion.titulo}\nPrecio: ${publicacion.precio || 'no detectado'}`
@@ -259,4 +292,4 @@ async function consultarGroq(nombre, nuevoMensaje) {
   return { action: 'ignore', message: '', isBuyer: false, error: true };
 }
 
-module.exports = { consultarGroq };
+module.exports = { consultarGroq, detectarPreguntaDirecta, detectarPreguntaMedidas, ultimaLineaComprador };

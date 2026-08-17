@@ -6,3 +6,9 @@ debug.png
 diagnostico.png
 ss_bot.png
 bot.log
+bot.err.log
+wa_session/
+wa-qr.png
+wa-test.log
+wa-test.err
+wa-test.pid

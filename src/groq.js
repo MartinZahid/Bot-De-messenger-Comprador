@@ -5,7 +5,7 @@ const state = require('./state');
 const {
   GROQ_KEY, GROQ_MODEL, MAX_HISTORIAL, SYSTEM_PROMPT,
   GROQ_BACKOFF_BASE_MS, GROQ_BACKOFF_MAX_MS, GROQ_MAX_RETRIES,
-  sleep,
+  CONTACTO_NUMERO, sleep,
 } = require('./config');
 
 if (!GROQ_KEY) {
@@ -15,7 +15,8 @@ if (!GROQ_KEY) {
 }
 
 if (GROQ_KEY.includes('gsk_') && GROQ_KEY.length > 20) {
-  console.warn('⚠ GROQ_API_KEY configurada. Asegúrate de rotarla si está expuesta en el repositorio.');
+  const enmascarada = GROQ_KEY.slice(0, 6) + '****' + GROQ_KEY.slice(-4);
+  console.warn(`⚠ GROQ_API_KEY configurada (${enmascarada}). Asegúrate de no exponerla en el repositorio.`);
 }
 
 const groq = new Groq({ apiKey: GROQ_KEY });
@@ -38,12 +39,12 @@ const REGLAS_PREGUNTAS = [
   },
   {
     test: /\b(ubicación|dirección|donde|dónde|zona|colonia|estás)\b/i,
-    msg: 'Estoy al sur de la ciudad, pero hago envíos dependiendo de la zona. Mi número es 6371005468 para coordinar. ¿De dónde eres?',
+    msg: `Estoy al sur de la ciudad, pero hago envíos dependiendo de la zona. Mi número es ${CONTACTO_NUMERO} para coordinar. ¿De dónde eres?`,
     requiresContext: true,
   },
   {
     test: /\b(numero|número|telefono|teléfono|whatsapp|wsp|contacto|cel|celular)\b/i,
-    msg: 'Claro, mi número es 6371005468. Escríbeme por ahí también. ¿De dónde eres?',
+    msg: `Claro, mi número es ${CONTACTO_NUMERO}. Escríbeme por ahí también. ¿De dónde eres?`,
   },
   {
     test: /\b(foto|fotos|imagen|imágenes|ver|muestra|enseña|mostrar)\b/i,

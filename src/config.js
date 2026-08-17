@@ -8,8 +8,9 @@ const PORT = process.env.PORT || 10000;
 const POLL_MS = Math.max(10000, parseInt(process.env.POLL_INTERVAL) || 20000);
 const IDLE_MS = 300000;
 const COOKIES_PATH = path.join(__dirname, '..', 'cookies.json');
-const TOKEN = process.env.TELEGRAM_TOKEN;
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const WHATSAPP_TO = process.env.WHATSAPP_TO ? process.env.WHATSAPP_TO.replace(/[^\d]/g, '') : null;
+const WHATSAPP_NUMBER = process.env.WHATSAPP_NUMBER ? process.env.WHATSAPP_NUMBER.replace(/[^\d]/g, '') : null;
+const CONTACTO_NUMERO = process.env.CONTACTO_NUMERO || '6371005468';
 const GROQ_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const MAX_HISTORIAL = 10;
@@ -58,7 +59,7 @@ const SISTEMA = [
 const BUSINESS_RULES = {
   ubicacion: 'Estás al sur de la ciudad. Haces envíos a domicilio según la zona del comprador.',
   precio: 'El precio es el de la publicación, no se negocia.',
-  contacto: 'Tu número de contacto (WhatsApp/celular) es 6371005468.',
+  contacto: `Tu número de contacto (WhatsApp/celular) es ${CONTACTO_NUMERO}.`,
   tono: `CÓMO HABLAS:
 - Tono amable, cercano, como chat normal.
 - Mensajes cortos, sin sonar a plantilla.
@@ -95,10 +96,10 @@ INSTRUCCIONES:
 1. Responde siempre en español, con tono amable y natural, COMO EL VENDEDOR (no como el comprador).
 2. Analiza el HISTORIAL COMPLETO de la conversación con los prefijos Vendedor/Comprador para entender el contexto.
 3. Si preguntan por disponibilidad: confirma que está disponible y pregunta si le interesa.
-4. Si preguntan por ubicación: indica que estás al sur de la ciudad, que también haces envíos dependiendo de la zona, comparte tu número de contacto (6371005468) para coordinar, y pregunta de dónde es.
+4. Si preguntan por ubicación: indica que estás al sur de la ciudad, que también haces envíos dependiendo de la zona, comparte tu número de contacto (${CONTACTO_NUMERO}) para coordinar, y pregunta de dónde es.
 5. Si preguntan por precio: di que es el mismo de la publicación.
 6. Si preguntan si haces envíos a domicilio: responde que SÍ, aclarando que depende de la zona/ubicación del comprador.
-7. Si piden tu número, teléfono, WhatsApp o contacto directamente: compártelo (6371005468).
+7. Si piden tu número, teléfono, WhatsApp o contacto directamente: compártelo (${CONTACTO_NUMERO}).
 8. Si el comprador muestra INTERÉS REAL DE COMPRA (quiere ir a verte, pide tu ubicación exacta, dice "lo quiero", "lo compro", "voy", "ahora", "me queda cerca", "pasame tu dirección", etc.): responde confirmando y marca is_buyer=true.
 9. Si la conversación YA ESTÁ CONCLUIDA (el comprador dijo gracias, okay, confirmó compra, o ya se acordó un encuentro): usa action "ignore".
 10. Si el mensaje es un consejo de seguridad automatizado de Marketplace: ignóralo, haz caso al último mensaje real del comprador.
@@ -160,7 +161,8 @@ const hash = s => {
 };
 
 module.exports = {
-  PORT, POLL_MS, IDLE_MS, COOKIES_PATH, TOKEN, CHAT_ID, GROQ_KEY, GROQ_MODEL,
+  PORT, POLL_MS, IDLE_MS, COOKIES_PATH, WHATSAPP_TO, WHATSAPP_NUMBER, CONTACTO_NUMERO,
+  GROQ_KEY, GROQ_MODEL,
   MAX_HISTORIAL, MAX_MESSAGES_SCRAPED, BATCH_SIZE,
   GROQ_BACKOFF_BASE_MS, GROQ_BACKOFF_MAX_MS, GROQ_MAX_RETRIES,
   SEL, SISTEMA, SYSTEM_PROMPT, BUSINESS_RULES, DECISION_RULES, FORMAT_INSTRUCTIONS,

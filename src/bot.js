@@ -8,11 +8,13 @@ const {
 const { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, guardarCookies } = require('./browser');
 const { obtenerConversaciones, scrapearMensajes, enviarMensaje, clickMarketplaceTab } = require('./messenger');
 const { consultarGroq } = require('./groq');
-const { sendTelegram, autoDetectarChatId, enviarAlerta } = require('./telegram');
+const { sendWhatsApp, enviarAlerta, iniciarWhatsApp } = require('./whatsapp');
 const { iniciarServidor } = require('./server');
 const { guardarEstado, cargarEstado } = require('./persistencia');
 
 let idleTimeout = null;
+let fallosConsecutivos = 0;
+const MAX_FALLOS = 3;
 
 /**
  * Ejecuta page.evaluate de forma segura, reintenta una vez si detecta
@@ -132,7 +134,7 @@ async function procesarConversacion({ nombre, preview, indice }) {
     }
 
     if (decision.isBuyer) {
-      await sendTelegram(nombre, preview);
+      await sendWhatsApp(nombre, preview);
     }
 
     return decision.isBuyer;
@@ -159,6 +161,7 @@ async function cicloPrincipal() {
       console.log('🔄 Sesión expirada, reiniciando navegador...');
       await enviarAlerta('Sesión expirada', 'El bot se reinició automáticamente pero necesita cookies nuevas.');
       await reiniciarBrowser();
+      fallosConsecutivos = 0;
       return;
     }
 
@@ -170,10 +173,10 @@ async function cicloPrincipal() {
     if (!state.bootstrapDone) {
       for (const c of conversaciones) {
         if (c.esPropio) {
-          state.processed.set(c.nombre, hash(`${c.nombre}|${c.ultimo}`));
+          state.processed.set(c.nombre, { hash: hash(`${c.nombre}|${c.ultimo}`), ts: Date.now() });
         }
         if (c.esHumano) {
-          state.humanHandled.add(c.nombre);
+          state.humanHandled.set(c.nombre, Date.now());
         }
       }
       state.bootstrapDone = true;
@@ -185,10 +188,11 @@ async function cicloPrincipal() {
     for (const conv of conversaciones) {
       if (conv.esPropio || conv.esSistema || conv.esSticker) continue;
       if (state.humanHandled.has(conv.nombre)) continue;
-      if (conv.esHumano) { state.humanHandled.add(conv.nombre); continue; }
+      if (conv.esHumano) { state.humanHandled.set(conv.nombre, Date.now()); continue; }
       const clave = hash(`${conv.nombre}|${conv.ultimo}`);
-      if (state.processed.get(conv.nombre) === clave) continue;
-      state.processed.set(conv.nombre, clave);
+      const previo = state.processed.get(conv.nombre);
+      if (previo && previo.hash === clave) continue;
+      state.processed.set(conv.nombre, { hash: clave, ts: Date.now() });
       pendientes.push(conv);
       if (pendientes.length >= BATCH_SIZE) break;
     }
@@ -214,14 +218,16 @@ async function cicloPrincipal() {
 
     guardarEstado();
     guardarCookies();
+    fallosConsecutivos = 0;
   } catch (err) {
-    console.error('❌ Error en ciclo principal:', err.message);
+    fallosConsecutivos++;
+    console.error(`❌ Error en ciclo principal (${fallosConsecutivos}/${MAX_FALLOS}):`, err.message);
     if (
       err.message.includes('detached from frame') ||
       err.message.includes('Target closed') ||
       err.message.includes('Protocol error')
     ) {
-      reiniciarBrowser();
+      await reiniciarBrowser();
     }
   } finally {
     state.busy = false;
@@ -231,9 +237,19 @@ async function cicloPrincipal() {
 /**
  * Programa el siguiente ciclo con delay adaptivo:
  * POLL_MS cuando hay actividad, IDLE_MS cuando está en reposo.
+ * Aplica backoff si hay fallos consecutivos (posible bloqueo de Facebook).
  */
 function programarSiguiente() {
-  const delay = state.idle ? IDLE_MS : POLL_MS;
+  let delay = state.idle ? IDLE_MS : POLL_MS;
+  if (fallosConsecutivos > 0) {
+    delay = Math.min(POLL_MS * Math.pow(2, fallosConsecutivos), IDLE_MS);
+    console.log(`⏳ Backoff activo: próximo ciclo en ${(delay / 1000).toFixed(0)}s`);
+  }
+  if (fallosConsecutivos >= MAX_FALLOS) {
+    fallosConsecutivos = 0;
+    console.log('🔄 Muchos fallos seguidos, reiniciando navegador...');
+    reiniciarBrowser();
+  }
   idleTimeout = setTimeout(async () => {
     try {
       await cicloPrincipal();
@@ -245,8 +261,9 @@ function programarSiguiente() {
 }
 
 /**
- * Punto de entrada del bot. Carga estado persistido, detecta chat de Telegram,
+ * Punto de entrada del bot. Carga estado persistido, inicia WhatsApp,
  * inicia Chromium, lanza servidor Express y arranca el loop de polling.
+ * No mata el proceso con errores fatales: reintenta el inicio.
  */
 async function start() {
   process.on('unhandledRejection', err => {
@@ -256,20 +273,32 @@ async function start() {
     console.error('💥 Uncaught Exception:', err.message);
   });
 
-  try {
-    await cargarEstado();
-    await autoDetectarChatId();
-    await iniciarBrowser();
-    iniciarServidor();
-    setTimeout(async () => {
-      await cicloPrincipal();
-      programarSiguiente();
-      const modo = state.idle ? `${IDLE_MS / 1000}s (reposo)` : `${POLL_MS / 1000}s (activo)`;
-      console.log(`⏱ Monitor iniciado (modo: ${modo}) usando ${GROQ_MODEL || 'default'} | batch: ${BATCH_SIZE}`);
-    }, 3000);
-  } catch (err) {
-    console.error('💥 Error fatal al iniciar:', err);
-    process.exit(1);
+  const iniciarTodo = async () => {
+    try {
+      await cargarEstado();
+      await iniciarBrowser();
+      iniciarServidor();
+      setTimeout(async () => {
+        await cicloPrincipal();
+        programarSiguiente();
+        const modo = state.idle ? `${IDLE_MS / 1000}s (reposo)` : `${POLL_MS / 1000}s (activo)`;
+        console.log(`⏱ Monitor iniciado (modo: ${modo}) usando ${GROQ_MODEL || 'default'} | batch: ${BATCH_SIZE}`);
+      }, 3000);
+      return true;
+    } catch (err) {
+      console.error('💥 Error al iniciar:', err.message);
+      return false;
+    }
+  };
+
+  iniciarWhatsApp();
+
+  let intento = 1;
+  while (!(await iniciarTodo())) {
+    const espera = Math.min(30000, 5000 * intento);
+    console.log(`🔄 Reintentando inicio en ${espera / 1000}s (intento ${intento})...`);
+    await sleep(espera);
+    intento++;
   }
 }
 

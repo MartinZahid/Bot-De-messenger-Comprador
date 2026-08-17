@@ -118,11 +118,22 @@ async function scrapearMensajes() {
         if (!el) break;
         const style = window.getComputedStyle(el);
         const jc = style.justifyContent;
-        if (jc === 'flex-end' || jc === 'end' || style.alignSelf === 'flex-end') {
+        const fd = style.flexDirection;
+        if (
+          jc === 'flex-end' || jc === 'end' ||
+          style.alignSelf === 'flex-end' ||
+          fd === 'row-reverse' ||
+          style.float === 'right'
+        ) {
           esVendedor = true;
           break;
         }
         el = el.parentElement;
+      }
+
+      // Fallback textual: si el span comienza con "Tú:" o "You:", es del vendedor
+      if (!esVendedor && /^(Tú|You):/.test(t)) {
+        esVendedor = true;
       }
 
       mensajes.push(`${esVendedor ? 'Vendedor' : 'Comprador'}: ${t}`);
@@ -177,14 +188,15 @@ async function encontrarInput() {
 }
 
 /**
- * Envía un mensaje de texto en la conversación actual.
+ * Envía un mensaje de texto en la conversación actual y verifica que
+ * realmente apareció en el chat antes de retornar true.
  * Usa 3 estrategias en cascada:
  * 1. Click en botón "Enviar" por selector CSS
  * 2. Click por aria-label en evaluate
  * 3. Presionar Enter
  *
  * @param {string} texto - Mensaje a enviar.
- * @returns {Promise<boolean>} true si se envió (o al menos se intentó).
+ * @returns {Promise<boolean>} true si se confirmó que el mensaje se envió.
  */
 async function enviarMensaje(texto) {
   const { page } = state;
@@ -212,8 +224,8 @@ async function enviarMensaje(texto) {
       if (box) {
         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
         console.log('📤 Click en botón Enviar');
-        await sleep(1000);
-        return true;
+        await sleep(1500);
+        if (await mensajeAparecio(texto)) return true;
       }
     }
   } catch (e) {
@@ -239,17 +251,51 @@ async function enviarMensaje(texto) {
 
   if (clicked) {
     console.log('📤 Click en botón Enviar (fallback evaluate)');
-    await sleep(1000);
-    return true;
+    await sleep(1500);
+    if (await mensajeAparecio(texto)) return true;
   }
 
   // Estrategia 3: Enter key nativo (funciona en Messenger web)
   await page.keyboard.press('Enter');
-  await sleep(500);
+  await sleep(1200);
+  if (await mensajeAparecio(texto)) {
+    console.log('📤 Enter presionado y verificado');
+    return true;
+  }
+
+  // Último intento: segundo Enter solo si el primero no se confirmó
   await page.keyboard.press('Enter');
-  console.log('📤 Enter presionado');
-  await sleep(1000);
-  return true;
+  await sleep(1200);
+  if (await mensajeAparecio(texto)) {
+    console.log('📤 Segundo Enter verificado');
+    return true;
+  }
+
+  console.error('❌ No se pudo confirmar que el mensaje se envió');
+  return false;
+}
+
+/**
+ * Verifica si el texto enviado aparece como último mensaje del chat,
+ * re-scrapeando los mensajes visibles.
+ *
+ * @param {string} texto - Texto que se intentó enviar.
+ * @returns {Promise<boolean>} true si el texto aparece en el historial reciente.
+ */
+async function mensajeAparecio(texto) {
+  const { page } = state;
+  if (!page || page.isClosed()) return false;
+  try {
+    const mensajes = await scrapearMensajes();
+    const normalizado = texto.trim();
+    return mensajes.some(m => {
+      const contenido = m.replace(/^(Vendedor|Comprador):\s*/, '').trim();
+      return contenido.includes(normalizado) || normalizado.includes(contenido);
+    });
+  } catch (e) {
+    console.warn(`⚠ No se pudo verificar el envío: ${e.message}`);
+    return false;
+  }
 }
 
 /**

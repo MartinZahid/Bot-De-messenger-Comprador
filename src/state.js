@@ -11,9 +11,9 @@
  *   busy: boolean,
  *   idle: boolean,
  *   bootstrapDone: boolean,
- *   processed: Map<string, string>,
+ *   processed: Map<string, {hash: string, ts: number}>,
  *   historial: Map<string, Array<{role: string, content: string}>>,
- *   humanHandled: Set<string>,
+ *   humanHandled: Map<string, number>,
  * }}
  */
 module.exports = {
@@ -23,10 +23,10 @@ module.exports = {
   busy: false,
   idle: false,
   bootstrapDone: false,
-  /** @type {Map<string, string>} nombre → hash del último mensaje */
+  /** @type {Map<string, {hash: string, ts: number}>} nombre → hash del último mensaje + timestamp */
   processed: new Map(),
   /** @type {Map<string, Array<{role: string, content: string}>>} nombre → historial de chat con Groq */
   historial: new Map(),
-  /** @type {Set<string>} nombres de conversaciones donde un humano ya respondió */
-  humanHandled: new Set(),
+  /** @type {Map<string, number>} nombres de conversaciones donde un humano ya respondió → timestamp */
+  humanHandled: new Map(),
 };

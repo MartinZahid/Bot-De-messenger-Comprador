@@ -40,7 +40,7 @@ app.get('/chats', async (_req, res) => {
       chats: chats.map(c => ({
         nombre: c.nombre,
         preview: c.preview.slice(0, 100),
-        procesado: state.processed.get(c.nombre) === hash(`${c.nombre}|${c.ultimo}`),
+        procesado: state.processed.get(c.nombre)?.hash === hash(`${c.nombre}|${c.ultimo}`),
       })),
     });
   } catch (err) {

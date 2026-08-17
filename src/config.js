@@ -10,7 +10,7 @@ const IDLE_MS = 300000;
 const COOKIES_PATH = path.join(__dirname, '..', 'cookies.json');
 const WHATSAPP_TO = process.env.WHATSAPP_TO ? process.env.WHATSAPP_TO.replace(/[^\d]/g, '') : null;
 const WHATSAPP_NUMBER = process.env.WHATSAPP_NUMBER ? process.env.WHATSAPP_NUMBER.replace(/[^\d]/g, '') : null;
-const CONTACTO_NUMERO = process.env.CONTACTO_NUMERO || '6371005468';
+const CONTACTO_NUMERO = process.env.CONTACTO_NUMERO || '';
 const GROQ_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const MAX_HISTORIAL = 10;
@@ -99,7 +99,7 @@ INSTRUCCIONES:
 4. Si preguntan por ubicación: indica que estás al sur de la ciudad, que también haces envíos dependiendo de la zona, comparte tu número de contacto (${CONTACTO_NUMERO}) para coordinar, y pregunta de dónde es.
 5. Si preguntan por precio: di que es el mismo de la publicación.
 6. Si preguntan si haces envíos a domicilio: responde que SÍ, aclarando que depende de la zona/ubicación del comprador.
-7. Si piden tu número, teléfono, WhatsApp o contacto directamente: compártelo (${CONTACTO_NUMERO}).
+7. Si piden tu número, teléfono, WhatsApp o contacto directamente: compártelo (${CONTACTO_NUMERO}) y marca is_buyer=true.
 8. Si el comprador muestra INTERÉS REAL DE COMPRA (quiere ir a verte, pide tu ubicación exacta, dice "lo quiero", "lo compro", "voy", "ahora", "me queda cerca", "pasame tu dirección", etc.): responde confirmando y marca is_buyer=true.
 9. Si la conversación YA ESTÁ CONCLUIDA (el comprador dijo gracias, okay, confirmó compra, o ya se acordó un encuentro): usa action "ignore".
 10. Si el mensaje es un consejo de seguridad automatizado de Marketplace: ignóralo, haz caso al último mensaje real del comprador.

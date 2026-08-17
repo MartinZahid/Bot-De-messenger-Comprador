@@ -41,10 +41,13 @@ const REGLAS_PREGUNTAS = [
     test: /\b(ubicación|dirección|donde|dónde|zona|colonia|estás)\b/i,
     msg: `Estoy al sur de la ciudad, pero hago envíos dependiendo de la zona. Mi número es ${CONTACTO_NUMERO} para coordinar. ¿De dónde eres?`,
     requiresContext: true,
+    zonaContext: true,
   },
   {
     test: /\b(numero|número|telefono|teléfono|whatsapp|wsp|contacto|cel|celular)\b/i,
     msg: `Claro, mi número es ${CONTACTO_NUMERO}. Escríbeme por ahí también. ¿De dónde eres?`,
+    requiresContext: true,
+    isBuyer: true,
   },
   {
     test: /\b(foto|fotos|imagen|imágenes|ver|muestra|enseña|mostrar)\b/i,
@@ -77,12 +80,12 @@ function vendedorYaRespondio(historialRaw) {
     /gracias/i, /perfecto/i, /sale/i, /va\b/i, /ok\b/i,
     /nos vemos/i, /hasta luego/i, /bye/i,
   ];
-  const patronUbicacion = /sur de la ciudad|dirección|ubicación|te paso|envíos/i;
+  const patronYaCompartido = /sur de la ciudad|dirección|ubicación|te paso|envíos|mi número es/i;
 
   for (const linea of ultimasLineas) {
     if (!linea.startsWith('Vendedor:')) continue;
     const contenido = linea.replace(/^Vendedor:\s*/, '');
-    if (patronUbicacion.test(contenido)) return true;
+    if (patronYaCompartido.test(contenido)) return true;
     if (patronesCierre.some(p => p.test(contenido))) return true;
   }
   return false;
@@ -98,7 +101,7 @@ function vendedorYaRespondio(historialRaw) {
  *
  * @param {string} texto - Último mensaje del comprador.
  * @param {string} historialRaw - Historial completo de la conversación.
- * @returns {string|null} Respuesta predefinida o null si no aplica override.
+ * @returns {{msg: string, isBuyer: boolean}|null} Respuesta predefinida o null si no aplica override.
  */
 function detectarPreguntaDirecta(texto, historialRaw) {
   if (vendedorYaRespondio(historialRaw)) {
@@ -114,17 +117,17 @@ function detectarPreguntaDirecta(texto, historialRaw) {
       continue;
     }
 
-    if (r.requiresContext) {
+    if (r.zonaContext) {
       const mencionaZona = /\b(sur|norte|centro|este|oeste|zona|colonia)\b/i.test(texto);
       const esPreguntaReal = /\b(donde|dónde|qué zona|en que zona|de dónde|cómo llego|queda cerca)\b/i.test(texto);
       if (mencionaZona && !esPreguntaReal) continue;
     }
 
-    return r.msg;
+    return { msg: r.msg, isBuyer: r.isBuyer === true };
   }
 
   if (esPregunta) {
-    return '¡Claro! ¿Qué necesitas saber?';
+    return { msg: '¡Claro! ¿Qué necesitas saber?', isBuyer: false };
   }
 
   return null;
@@ -184,7 +187,10 @@ async function consultarGroq(nombre, nuevoMensaje) {
         if (respuestaForzada) {
           console.log(`⚠ Groq ignoró, pero se detectó pregunta directa. Forzando reply.`);
           parsed.action = 'reply';
-          parsed.message = respuestaForzada;
+          parsed.message = respuestaForzada.msg;
+          if (respuestaForzada.isBuyer) {
+            parsed.is_buyer = true;
+          }
         }
       }
 

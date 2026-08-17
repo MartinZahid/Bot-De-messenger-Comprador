@@ -69,6 +69,7 @@ async function probar() {
     browser: Browsers.macOS('Desktop'),
     markOnlineOnConnect: false,
     syncFullHistory: false,
+    qrTimeout: 180000,
     logger,
   });
 

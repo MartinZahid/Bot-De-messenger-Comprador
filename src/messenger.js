@@ -147,6 +147,62 @@ async function scrapearMensajes() {
 }
 
 /**
+ * Scrapea la tarjetita de la publicación de Marketplace que aparece arriba
+ * de la conversación (foto + título + precio).
+ *
+ * La estructura exacta cambia con cada actualización de Meta, por eso se
+ * usan varias estrategias en cascada:
+ * 1. Selectores candidatos (enlaces/anclas de publicación).
+ * 2. Fallback heurístico: buscar un bloque con imagen + texto de precio.
+ *
+ * NUNCA inventa un precio: retorna null si no logra detectarlo.
+ *
+ * @returns {Promise<{titulo: string, precio: string}|null>} Datos detectados o null.
+ */
+async function scrapearPublicacion() {
+  const { page } = state;
+  if (!page || page.isClosed()) return null;
+
+  try {
+    return await page.evaluate(() => {
+      const precioPatron = /\$\s?\d{1,3}([.,]\d{3})*([.,]\d{1,2})?/;
+      const area = document.querySelector('[role="main"]') || document.body;
+
+      const candidatos = [];
+      const todos = area.querySelectorAll('a, [role="link"], div');
+      for (const el of todos) {
+        if (el.offsetParent === null) continue;
+        const texto = (el.innerText || el.textContent || '').trim();
+        if (!texto) continue;
+        const precio = texto.match(precioPatron);
+        const img = el.querySelector('img');
+        if (!img || !precio) continue;
+        if (texto.length > 400) continue;
+        candidatos.push({ el, texto, precio: precio[0] });
+      }
+
+      if (candidatos.length === 0) return null;
+
+      // Elegir el candidato más corto (tarjeta compacta, no la página entera)
+      candidatos.sort((a, b) => a.texto.length - b.texto.length);
+      const mejor = candidatos[0];
+
+      // El título es la primera línea antes del precio
+      const lineas = mejor.texto.split('\n').map(l => l.trim()).filter(Boolean);
+      const titulo = lineas.find(l => l !== mejor.precio && !l.includes(mejor.precio)) || '';
+
+      return { titulo, precio: mejor.precio };
+    }).catch(e => {
+      console.warn(`⚠ Error scrapeando publicación: ${e.message}`);
+      return null;
+    });
+  } catch (e) {
+    console.warn(`⚠ No se pudo scrapear la publicación: ${e.message}`);
+    return null;
+  }
+}
+
+/**
  * Busca el cuadro de texto de Mensaje en el DOM usando múltiples selectores.
  * Primero intenta por selector CSS, luego por evaluate como fallback.
  *
@@ -322,6 +378,7 @@ async function clickMarketplaceTab() {
 module.exports = {
   obtenerConversaciones,
   scrapearMensajes,
+  scrapearPublicacion,
   encontrarInput,
   enviarMensaje,
   clickMarketplaceTab,

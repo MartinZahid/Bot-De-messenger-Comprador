@@ -8,6 +8,7 @@ const ESTADO_PATH = path.join(__dirname, '..', 'estado.json');
 const TIEMPO_PODA_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_PROCESADOS = 2000;
 const MAX_HUMAN_HANDLED = 1000;
+const MAX_PUBLICACIONES = 500;
 
 /**
  * Poda las estructuras de estado: elimina entradas más antiguas que
@@ -27,6 +28,19 @@ function podarEstado() {
     if (ts && ahora - ts > TIEMPO_PODA_MS) {
       state.humanHandled.delete(nombre);
     }
+  }
+
+  for (const [nombre, valor] of state.publicaciones) {
+    const ts = valor && valor.ts ? valor.ts : 0;
+    if (ts && ahora - ts > TIEMPO_PODA_MS) {
+      state.publicaciones.delete(nombre);
+    }
+  }
+
+  if (state.publicaciones.size > MAX_PUBLICACIONES) {
+    const ordenado = Array.from(state.publicaciones.entries())
+      .sort((a, b) => (b[1]?.ts || 0) - (a[1]?.ts || 0));
+    state.publicaciones = new Map(ordenado.slice(0, MAX_PUBLICACIONES));
   }
 
   if (state.processed.size > MAX_PROCESADOS) {
@@ -53,6 +67,7 @@ async function guardarEstado() {
       processed: Array.from(state.processed.entries()),
       historial: Array.from(state.historial.entries()),
       humanHandled: Array.from(state.humanHandled.entries()),
+      publicaciones: Array.from(state.publicaciones.entries()),
       bootstrapDone: state.bootstrapDone,
       timestamp: new Date().toISOString(),
     };
@@ -100,9 +115,21 @@ async function cargarEstado() {
         return [item, Date.now()];
       }));
     }
+    if (data.publicaciones) {
+      state.publicaciones = new Map(data.publicaciones.map(([nombre, valor]) => {
+        if (valor && typeof valor === 'object') {
+          return [nombre, {
+            titulo: String(valor.titulo || ''),
+            precio: String(valor.precio || ''),
+            ts: valor.ts || Date.now(),
+          }];
+        }
+        return [nombre, { titulo: '', precio: String(valor || ''), ts: Date.now() }];
+      }));
+    }
 
     podarEstado();
-    console.log(`📦 Estado cargado: ${state.processed.size} procesados, ${state.historial.size} historiales, ${state.humanHandled.size} con respuesta humana`);
+    console.log(`📦 Estado cargado: ${state.processed.size} procesados, ${state.historial.size} historiales, ${state.humanHandled.size} con respuesta humana, ${state.publicaciones.size} publicaciones`);
     return true;
   } catch (err) {
     if (err.code === 'ENOENT') {

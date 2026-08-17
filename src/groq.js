@@ -32,6 +32,7 @@ const REGLAS_PREGUNTAS = [
   {
     test: /\b(precio|cuanto|cuesta|cuánto|valor|costó|caro|barato|cuestan)\b/i,
     msg: 'El precio es el que está en la publicación. ¿Te interesa?',
+    esPrecio: true,
   },
   {
     test: /\b(disponible|tienes|vendes|publicad|anuncio|hay|todavía)\b/i,
@@ -69,24 +70,33 @@ const REGLAS_PREGUNTAS = [
 
 /**
  * Detecta si el último mensaje del vendedor en el historial indica
- * que ya se compartió ubicación o se cerró la conversación.
+ * que ya se compartió ubicación/número o se cerró la conversación.
+ * También detecta si el comprador ya envió su dirección o la venta
+ * quedó concretada (en ese caso el bot no debe volver a responder).
  * @param {string} historialRaw - Texto completo del historial scrapeado.
- * @returns {boolean} true si el vendedor ya respondió con ubicación o despedida.
+ * @returns {boolean} true si ya no corresponde responder.
  */
 function vendedorYaRespondio(historialRaw) {
   const lineas = historialRaw.split('\n');
-  const ultimasLineas = lineas.slice(-6);
+  const ultimasLineas = lineas.slice(-8);
   const patronesCierre = [
     /gracias/i, /perfecto/i, /sale/i, /va\b/i, /ok\b/i,
     /nos vemos/i, /hasta luego/i, /bye/i,
   ];
   const patronYaCompartido = /sur de la ciudad|dirección|ubicación|te paso|envíos|mi número es/i;
+  const patronVentaConcretada = /lo quiero|lo compro|ya lo compré|pasame|pásame|te mando mi dirección|mi dirección es|mi ubicación es|te comparto mi ubicación|aquí está mi dirección|ya quedó|trato hecho|te espero|paso mañana|ahí voy|ya voy|en camino/i;
+  const patronDireccionEnviada = /\b(calle|avenida|av\.|col\.|colonia|número \d+|no\.\s*\d+)\b.*\b\d{2,}/i;
 
   for (const linea of ultimasLineas) {
-    if (!linea.startsWith('Vendedor:')) continue;
-    const contenido = linea.replace(/^Vendedor:\s*/, '');
-    if (patronYaCompartido.test(contenido)) return true;
-    if (patronesCierre.some(p => p.test(contenido))) return true;
+    const contenido = linea.replace(/^(Vendedor|Comprador):\s*/, '');
+    if (linea.startsWith('Vendedor:')) {
+      if (patronYaCompartido.test(contenido)) return true;
+      if (patronesCierre.some(p => p.test(contenido))) return true;
+    }
+    if (linea.startsWith('Comprador:')) {
+      if (patronVentaConcretada.test(contenido)) return true;
+      if (patronDireccionEnviada.test(contenido)) return true;
+    }
   }
   return false;
 }
@@ -94,16 +104,18 @@ function vendedorYaRespondio(historialRaw) {
 /**
  * Detecta preguntas directas del comprador y genera una respuesta
  * predefinida. Incluye validación de contexto para evitar falsos positivos:
- * - No responde si el vendedor ya compartió ubicación.
+ * - No responde si el vendedor ya compartió ubicación/número.
  * - No responde si la conversación parece cerrada.
  * - Para la regla de "ubicación", verifica que sea una pregunta real
  *   (no solo mención casual de zonas).
+ * - La regla de "precio" usa el precio detectado de la publicación si existe.
  *
  * @param {string} texto - Último mensaje del comprador.
  * @param {string} historialRaw - Historial completo de la conversación.
+ * @param {string} [precioDetectado] - Precio detectado de la publicación (ej. "$450,000") o vacío.
  * @returns {{msg: string, isBuyer: boolean}|null} Respuesta predefinida o null si no aplica override.
  */
-function detectarPreguntaDirecta(texto, historialRaw) {
+function detectarPreguntaDirecta(texto, historialRaw, precioDetectado) {
   if (vendedorYaRespondio(historialRaw)) {
     return null;
   }
@@ -121,6 +133,10 @@ function detectarPreguntaDirecta(texto, historialRaw) {
       const mencionaZona = /\b(sur|norte|centro|este|oeste|zona|colonia)\b/i.test(texto);
       const esPreguntaReal = /\b(donde|dónde|qué zona|en que zona|de dónde|cómo llego|queda cerca)\b/i.test(texto);
       if (mencionaZona && !esPreguntaReal) continue;
+    }
+
+    if (r.esPrecio && precioDetectado) {
+      return { msg: `Está en ${precioDetectado}. ¿Te interesa?`, isBuyer: r.isBuyer === true };
     }
 
     return { msg: r.msg, isBuyer: r.isBuyer === true };
@@ -142,10 +158,17 @@ function detectarPreguntaDirecta(texto, historialRaw) {
  */
 async function consultarGroq(nombre, nuevoMensaje) {
   const historialConv = state.historial.get(nombre) || [];
+  const publicacion = state.publicaciones.get(nombre) || null;
+  const precioDetectado = publicacion && publicacion.precio ? publicacion.precio : '';
+
+  const contextoPublicacion = publicacion && publicacion.titulo
+    ? `Publicación: ${publicacion.titulo}\nPrecio: ${publicacion.precio || 'no detectado'}`
+    : null;
 
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...historialConv.slice(-MAX_HISTORIAL),
+    ...(contextoPublicacion ? [{ role: 'system', content: contextoPublicacion }] : []),
     { role: 'user', content: nuevoMensaje },
   ];
 
@@ -183,7 +206,7 @@ async function consultarGroq(nombre, nuevoMensaje) {
 
       if (parsed.action === 'ignore') {
         const ultimaLineaComprador = nuevoMensaje.split('\n').reverse().find(l => l.startsWith('Comprador:')) || '';
-        const respuestaForzada = detectarPreguntaDirecta(ultimaLineaComprador, nuevoMensaje);
+        const respuestaForzada = detectarPreguntaDirecta(ultimaLineaComprador, nuevoMensaje, precioDetectado);
         if (respuestaForzada) {
           console.log(`⚠ Groq ignoró, pero se detectó pregunta directa. Forzando reply.`);
           parsed.action = 'reply';

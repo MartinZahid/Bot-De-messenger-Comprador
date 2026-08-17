@@ -14,6 +14,7 @@
  *   processed: Map<string, {hash: string, ts: number}>,
  *   historial: Map<string, Array<{role: string, content: string}>>,
  *   humanHandled: Map<string, number>,
+ *   publicaciones: Map<string, {titulo: string, precio: string, ts: number}>,
  * }}
  */
 module.exports = {
@@ -29,4 +30,6 @@ module.exports = {
   historial: new Map(),
   /** @type {Map<string, number>} nombres de conversaciones donde un humano ya respondió → timestamp */
   humanHandled: new Map(),
+  /** @type {Map<string, {titulo: string, precio: string, ts: number}>} nombre → tarjetita de la publicación */
+  publicaciones: new Map(),
 };

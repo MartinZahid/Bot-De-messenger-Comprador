@@ -6,7 +6,7 @@ const {
   SEL, sleep, rnd, hash,
 } = require('./config');
 const { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, guardarCookies } = require('./browser');
-const { obtenerConversaciones, scrapearMensajes, enviarMensaje, clickMarketplaceTab } = require('./messenger');
+const { obtenerConversaciones, scrapearMensajes, scrapearPublicacion, enviarMensaje, clickMarketplaceTab } = require('./messenger');
 const { consultarGroq } = require('./groq');
 const { sendWhatsApp, enviarAlerta, iniciarWhatsApp } = require('./whatsapp');
 const { iniciarServidor } = require('./server');
@@ -122,6 +122,18 @@ async function procesarConversacion({ nombre, preview, indice }) {
     }
   } catch (e) {
     console.log(`⚠ No se pudieron scrapear mensajes: ${e.message}`);
+  }
+
+  try {
+    const publicacion = await scrapearPublicacion();
+    if (publicacion && publicacion.titulo && publicacion.precio) {
+      state.publicaciones.set(nombre, { ...publicacion, ts: Date.now() });
+      console.log(`🏷 Publicación detectada: "${publicacion.titulo}" — ${publicacion.precio}`);
+    } else if (!state.publicaciones.has(nombre)) {
+      state.publicaciones.set(nombre, { titulo: '', precio: '', ts: Date.now() });
+    }
+  } catch (e) {
+    console.log(`⚠ No se pudo leer la publicación: ${e.message}`);
   }
 
   const decision = await consultarGroq(nombre, contexto);
@@ -302,4 +314,4 @@ async function start() {
   }
 }
 
-module.exports = { start };
+module.exports = { start, navegarAMarketplace };

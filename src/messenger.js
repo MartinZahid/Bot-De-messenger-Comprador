@@ -82,6 +82,7 @@ async function obtenerConversaciones() {
         preview: preview,
         ultimo: ultimo || preview,
         indice: idx,
+        href: el.getAttribute('href') || '',
         esPropio,
         esHumano,
         esSistema,

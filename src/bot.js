@@ -95,21 +95,36 @@ async function navegarAMarketplace() {
  * @param {{nombre: string, preview: string, indice: number}} conv - Conversación a procesar.
  * @returns {Promise<boolean>} true si se procesó un comprador real.
  */
-async function procesarConversacion({ nombre, clave, preview, indice }) {
+async function procesarConversacion({ nombre, clave, preview, indice, href }) {
   const { page } = state;
   const ck = clave || nombre;
   console.log(`🔍 Procesando: ${nombre} — "${preview.slice(0, 80)}"`);
 
-  const enlaces = await page.$$(SEL?.CONV_LINK);
-  if (!enlaces[indice]) {
-    console.error(`❌ No se encontró el enlace índice ${indice}`);
-    return false;
+  if (!href) {
+    const enlaces = await page.$$(SEL?.CONV_LINK);
+    if (!enlaces[indice]) {
+      console.error(`❌ No se encontró el enlace índice ${indice}`);
+      return false;
+    }
+    href = await enlaces[indice].evaluate(el => el.getAttribute('href'));
   }
-  const href = await enlaces[indice].evaluate(el => el.getAttribute('href'));
   await page.goto(`https://www.messenger.com${href}`, {
     waitUntil: 'networkidle2',
     timeout: 15000,
   });
+
+  const threadId = (href.match(/\/t\/([^/?]+)/) || [])[1];
+  if (threadId) {
+    try {
+      await page.waitForFunction(
+        (tid) => window.location.pathname.includes(tid),
+        { timeout: 8000 },
+        threadId
+      );
+    } catch (e) {
+      console.warn(`⚠ No se confirmó la navegación al chat ${threadId}: ${e.message}`);
+    }
+  }
   await sleep(2000 + rnd(0, 1000));
 
   await cerrarDialogos();
@@ -332,6 +347,19 @@ async function start() {
   process.on('uncaughtException', err => {
     console.error('💥 Uncaught Exception:', err.message);
   });
+
+  const cerrarOrdenado = async (señal) => {
+    console.log(`🛑 Recibida señal ${señal}. Cerrando Chromium y guardando estado...`);
+    try {
+      if (state.browser) await state.browser.close();
+    } catch (e) {
+      console.warn(`⚠ Error cerrando browser: ${e.message}`);
+    }
+    try { await guardarEstado(); } catch (e) {}
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => cerrarOrdenado('SIGTERM'));
+  process.on('SIGINT', () => cerrarOrdenado('SIGINT'));
 
   const iniciarTodo = async () => {
     try {

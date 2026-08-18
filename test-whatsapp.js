@@ -107,9 +107,21 @@ async function probar() {
     }
 
     if (connection === 'open') {
-      console.log('✅ WhatsApp conectado. Enviando mensaje de prueba...');
+      console.log('✅ WhatsApp conectado. Resolviendo LID del destino...');
       try {
-        const key = await sock.sendMessage(DESTINO, {
+        const resolved = await sock.onWhatsApp(WHATSAPP_TO);
+        let destJid = resolved?.[0]?.lid || null;
+        if (!destJid) {
+          const fs = require('fs');
+          const lidPath = path.join(SESION_PATH, `lid-mapping-${WHATSAPP_TO}.json`);
+          if (fs.existsSync(lidPath)) {
+            const lid = JSON.parse(fs.readFileSync(lidPath, 'utf8'));
+            destJid = `${lid}@lid`;
+          }
+        }
+        destJid = destJid || resolved?.[0]?.jid || DESTINO;
+        console.log(`   Destino resuelto: ${destJid}`);
+        const key = await sock.sendMessage(destJid, {
           text: `🧪 Prueba del bot: notificaciones activadas.\nFecha: ${new Date().toLocaleString('es-MX')}`,
         });
         console.log('📤 Mensaje enviado. Esperando confirmación de entrega...');

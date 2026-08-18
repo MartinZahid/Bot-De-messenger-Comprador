@@ -4,6 +4,7 @@ const express = require('express');
 const state = require('./state');
 const { PORT, GROQ_MODEL, hash } = require('./config');
 const { obtenerConversaciones } = require('./messenger');
+const { enviarAlerta } = require('./whatsapp');
 
 const app = express();
 
@@ -99,6 +100,18 @@ app.get('/debug-input', async (_req, res) => {
       elementos: dump,
       screenshot: ss ? ss.slice(0, 500) + '...' : null,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /test-whatsapp — Envía una notificación de prueba por la conexión viva del bot.
+ */
+app.get('/test-whatsapp', async (_req, res) => {
+  try {
+    const ok = await enviarAlerta('Prueba', 'Mensaje de prueba desde el bot');
+    res.json({ enviado: ok, ready: state.ready });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

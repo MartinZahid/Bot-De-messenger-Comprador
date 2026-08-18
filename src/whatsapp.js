@@ -14,12 +14,13 @@ const { WHATSAPP_TO, WHATSAPP_NUMBER } = require('./config');
 const { sleep } = require('./config');
 
 const SESION_PATH = path.join(__dirname, '..', 'wa_session');
-const ID_DESTINO = WHATSAPP_TO ? `${WHATSAPP_TO}@s.whatsapp.net` : null;
-const logger = pino({ level: 'error' });
+const ID_DESTINO = WHATSAPP_TO ? (WHATSAPP_TO.includes('@') ? WHATSAPP_TO : `${WHATSAPP_TO}@s.whatsapp.net`) : null;
+const logger = pino({ level: 'debug' });
 
 let sock = null;
 let waReady = false;
 let codigoPendiente = null;
+let avisoInicioEnviado = false;
 const colaMensajes = [];
 
 /**
@@ -109,6 +110,16 @@ async function iniciarWhatsApp() {
     if (connection === 'open') {
       waReady = true;
       console.log('✅ WhatsApp conectado. Notificaciones activadas.');
+      if (ID_DESTINO && !avisoInicioEnviado) {
+        avisoInicioEnviado = true;
+        console.log('🟢 Enviando aviso de inicio al destino WhatsApp...');
+        try {
+          await sock.sendMessage(ID_DESTINO, { text: '🤖 Bot de Messenger iniciado ✅' });
+          console.log('📲 Aviso de inicio enviado');
+        } catch (err) {
+          console.error(`⚠ Error enviando aviso de inicio: ${err.message}`);
+        }
+      }
       await drenarCola();
     }
 

@@ -53,12 +53,38 @@ const SISTEMA = [
 ];
 
 /**
+ * Fragmentos del aviso de seguridad de Marketplace/Facebook. Meta divide el
+ * mensaje en varios spans del DOM, por eso se detecta por fragmentos y no por
+ * la frase completa.
+ */
+const SISTEMA_AVISOS = [
+  'consejos de seguridad',
+  'reunir con alguien',
+  'familiares y amigos',
+  'amigos adónde vas',
+  'compartir la ubicación',
+  'ubicación en tiempo real',
+  'en tiempo real',
+];
+
+/**
+ * Detecta si un texto corresponde al aviso de seguridad de Marketplace.
+ * @param {string} texto - Texto a evaluar.
+ * @returns {boolean} true si parece un aviso de seguridad.
+ */
+function esAvisoSeguridad(texto) {
+  if (!texto) return false;
+  const t = String(texto).toLowerCase();
+  return SISTEMA_AVISOS.some(f => t.includes(f));
+}
+
+/**
  * Reglas de negocio editables. Estas se inyectan en el prompt del sistema.
  * Separadas del formato de respuesta para facilitar mantenimiento.
  */
 const BUSINESS_RULES = {
-  ubicacion: 'Estás al sur de la ciudad. Haces envíos a domicilio según la zona del comprador.',
-  precio: 'El precio es el de la publicación, no se negocia.',
+  ubicacion: 'Estás al sur de la ciudad. Haces envíos a domicilio según la zona del comprador, pero NUNCA inventes colonias, costos de envío ni detalles de entrega. Esa información la da el vendedor personalmente.',
+  precio: 'El precio es el de la publicación, no se negocia. NUNCA inventes un precio.',
   contacto: `Tu número de contacto (WhatsApp/celular) es ${CONTACTO_NUMERO}.`,
   tono: `CÓMO HABLAS:
 - Tono amable, cercano, como chat normal.
@@ -103,7 +129,7 @@ INSTRUCCIONES:
    - Si NO se pudo detectar precio, di "El precio es el mismo que está en la publicación."
    - NUNCA inventes un precio si no viene del scraping de la publicación.
 7. Si preguntan por medidas o dimensiones (mide, mide cuánto, tamaño, dimensiones, alto, ancho, largo): NO respondas automáticamente. El vendedor lo maneja personalmente.
-8. Si preguntan por ubicación: di "Estoy al sur de la ciudad" y ofrece envío a domicilio según zona. Pregunta de dónde es el comprador SOLO si es necesario (si ya dijo su zona antes en la conversación, no vuelvas a preguntar).
+8. Si preguntan por ubicación: di "Estoy al sur de la ciudad" y ofrece envío a domicilio según zona. NO inventes colonias, zonas específicas ni costos de envío. Pregunta de dónde es el comprador SOLO si es necesario (si ya dijo su zona antes en la conversación, no vuelvas a preguntar).
 9. Si piden tu número, teléfono, WhatsApp o contacto directamente: compártelo (${CONTACTO_NUMERO}) y marca is_buyer=true.
 10. Si el comprador muestra INTERÉS REAL DE COMPRA (quiere ir a verte, pide tu ubicación exacta, dice "lo quiero", "lo compro", "voy", "ahora", "me queda cerca", "pasame tu dirección", etc.): responde confirmando y marca is_buyer=true.
 11. Si el mensaje es un consejo de seguridad automatizado de Marketplace: ignóralo, haz caso al último mensaje real del comprador.
@@ -112,6 +138,8 @@ INSTRUCCIONES:
 14. Si el comprador ya te pasó la ubicación (mapa o dirección), ya no respondas. Usa action "ignore".
 15. Si el comprador comparte ubicación (mapa) o dice "voy", "en camino", "ahí voy", "paso mañana", "ya voy": no respondas, usa action "ignore".
 16. Si el comprador solo dice "gracias", "ok", "sale", "va", "perfecto": usa action "ignore".
+17. Si el comprador dice dónde está o comparte su ubicación ("estoy en X", mapa, colonia): NO respondas. El vendedor lo maneja personalmente (es una venta).
+18. NUNCA inventes información: ni precios, ni colonias, ni costos de envío, ni detalles de entrega. Si no lo sabes, no lo inventes y deja que el vendedor responda.
 
 IMPORTANTE:
 - Eres el VENDEDOR. No respondas como si fueras el comprador.
@@ -169,6 +197,6 @@ module.exports = {
   GROQ_KEY, GROQ_MODEL,
   MAX_HISTORIAL, MAX_MESSAGES_SCRAPED, BATCH_SIZE,
   GROQ_BACKOFF_BASE_MS, GROQ_BACKOFF_MAX_MS, GROQ_MAX_RETRIES,
-  SEL, SISTEMA, SYSTEM_PROMPT, BUSINESS_RULES, DECISION_RULES, FORMAT_INSTRUCTIONS,
+  SEL, SISTEMA, SISTEMA_AVISOS, esAvisoSeguridad, SYSTEM_PROMPT, BUSINESS_RULES, DECISION_RULES, FORMAT_INSTRUCTIONS,
   buildSystemPrompt, sleep, rnd, hash,
 };

@@ -15,6 +15,7 @@
  *   historial: Map<string, Array<{role: string, content: string}>>,
  *   humanHandled: Map<string, number>,
  *   publicaciones: Map<string, {titulo: string, precio: string, ts: number}>,
+ *   filtros: Map<string, {disponible: boolean, ubicacion: boolean, avisado: boolean, ts: number}>,
  * }}
  */
 module.exports = {
@@ -32,4 +33,6 @@ module.exports = {
   humanHandled: new Map(),
   /** @type {Map<string, {titulo: string, precio: string, ts: number}>} nombre → tarjetita de la publicación */
   publicaciones: new Map(),
+  /** @type {Map<string, {disponible: boolean, ubicacion: boolean, avisado: boolean, ts: number}>} nombre → filtros del embudo de compra */
+  filtros: new Map(),
 };

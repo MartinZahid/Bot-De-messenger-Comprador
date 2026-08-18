@@ -2,7 +2,7 @@
 
 const path = require('path');
 const state = require('./state');
-const { SEL, SISTEMA, sleep, rnd } = require('./config');
+const { SEL, SISTEMA, SISTEMA_AVISOS, sleep, rnd } = require('./config');
 
 /**
  * @typedef {Object} Conversacion
@@ -24,13 +24,14 @@ const { SEL, SISTEMA, sleep, rnd } = require('./config');
  */
 async function obtenerConversaciones() {
   const { page } = state;
-  return await page.evaluate((linkSelector, spanSelector, palabrasSistema) => {
+  return await page.evaluate((linkSelector, spanSelector, palabrasSistema, avisos) => {
     const enlaces = document.querySelectorAll(linkSelector);
     return Array.from(enlaces).map((el, idx) => {
       const spans = el.querySelectorAll(spanSelector);
       const textos = Array.from(spans)
         .map(s => s.textContent.trim())
         .filter(Boolean);
+      const esAviso = t => avisos.some(f => t.toLowerCase().includes(f));
       const preview = textos.length >= 3
         ? textos.slice(1, -1).join(' ').replace(/\s+/g, ' ')
         : (textos[1] || textos[textos.length - 1] || '');
@@ -42,6 +43,7 @@ async function obtenerConversaciones() {
         if (/reaccionó a (tu|su|mi) mensaje/i.test(t)) return false;
         if (/reaccionó a/i.test(t)) return false;
         if (t.includes('consejos de seguridad') || t.includes('reunir con alguien en persona')) return false;
+        if (esAviso(t)) return false;
         return true;
       });
       const esHumano = textos.some(t => t.startsWith('Tú:') || t.startsWith('You:'));
@@ -49,7 +51,7 @@ async function obtenerConversaciones() {
         ? ultimo.startsWith('Tú:') || ultimo.startsWith('You:')
         : false;
       const esSistema = ultimo
-        ? ultimo.includes('consejos de seguridad') || ultimo.includes('reunir con alguien en persona')
+        ? ultimo.includes('consejos de seguridad') || ultimo.includes('reunir con alguien en persona') || esAviso(ultimo)
         : false;
       const esSticker = ultimo
         ? /^[👍❤️😊😂😍🎉🔥💯✅❌‼️❓🆗🔄⭐💪]+$/.test(ultimo) || ultimo.includes('sticker') || ultimo.includes('Sticker') || ultimo.length < 3
@@ -71,7 +73,7 @@ async function obtenerConversaciones() {
       if (!c.nombre.includes(' · ')) return false;
       return true;
     });
-  }, SEL.CONV_LINK, SEL.SPANS, SISTEMA);
+  }, SEL.CONV_LINK, SEL.SPANS, SISTEMA, SISTEMA_AVISOS);
 }
 
 /**
@@ -95,7 +97,8 @@ async function scrapearMensajes() {
 
   if (page.isClosed()) return [];
 
-  return await page.evaluate(() => {
+  return await page.evaluate((avisos) => {
+    const esAviso = t => avisos.some(f => t.toLowerCase().includes(f));
     const visitados = new Set();
     const area = document.querySelector('[role="main"]') || document.querySelector('[role="region"]') || document.body;
     const mensajes = [];
@@ -107,6 +110,7 @@ async function scrapearMensajes() {
       if (/^\d{1,2}:\d{2}$/.test(t)) continue;
       if (/^\d+\s*(min|h|sem|día|año)/i.test(t)) continue;
       if (t.includes('consejos de seguridad') || t.includes('reunir con alguien en persona')) continue;
+      if (esAviso(t)) continue;
       if (/reaccionó a (tu|su|mi) mensaje/i.test(t)) continue;
       if (t === 'Enviar' || t === 'Send') continue;
       if (visitados.has(t)) continue;
@@ -140,7 +144,7 @@ async function scrapearMensajes() {
     }
 
     return mensajes.slice(-15);
-  }).catch(e => {
+  }, SISTEMA_AVISOS).catch(e => {
     console.warn(`⚠ Error scrapeando mensajes: ${e.message}`);
     return [];
   });

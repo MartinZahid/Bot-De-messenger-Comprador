@@ -3,11 +3,11 @@
 const state = require('./state');
 const {
   POLL_MS, IDLE_MS, GROQ_MODEL, BATCH_SIZE,
-  SEL, sleep, rnd, hash,
+  SEL, sleep, rnd, hash, esAvisoSeguridad,
 } = require('./config');
 const { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, guardarCookies } = require('./browser');
 const { obtenerConversaciones, scrapearMensajes, scrapearPublicacion, enviarMensaje, clickMarketplaceTab } = require('./messenger');
-const { consultarGroq } = require('./groq');
+const { consultarGroq, ultimaLineaComprador, detectarDisponibilidad, detectarUbicacion, detectarUbicacionCompartida, detectarPreguntaMedidas } = require('./groq');
 const { sendWhatsApp, enviarAlerta, iniciarWhatsApp } = require('./whatsapp');
 const { iniciarServidor } = require('./server');
 const { guardarEstado, cargarEstado } = require('./persistencia');
@@ -136,33 +136,71 @@ async function procesarConversacion({ nombre, preview, indice }) {
     console.log(`⚠ No se pudo leer la publicación: ${e.message}`);
   }
 
-  const decision = await consultarGroq(nombre, contexto);
+  const ultimaLinea = ultimaLineaComprador(contexto);
 
-  if (decision.notificar) {
-    console.log(`📏 ${nombre} pregunta por medidas. Avisando al vendedor...`);
-    await enviarAlerta('Pregunta de medidas', `👤 ${nombre}\n💬 ${preview}`);
+  if (esAvisoSeguridad(contexto)) {
+    console.log(`🛡 ${nombre}: aviso de seguridad de Marketplace ignorado (sin responder ni alertar)`);
+    return false;
+  }
+
+  const filtro = state.filtros.get(nombre) || { disponible: false, ubicacion: false, avisado: false, ts: Date.now() };
+
+  if (detectarUbicacionCompartida(ultimaLinea)) {
+    console.log(`🛒 ${nombre}: compartió su ubicación. Avisando posible venta...`);
+    await enviarAlerta('Posible venta', `👤 ${nombre}\n💬 ${ultimaLinea || preview}`);
+    filtro.avisado = true;
+    filtro.ts = Date.now();
+    state.filtros.set(nombre, filtro);
     return true;
   }
 
+  if (detectarDisponibilidad(ultimaLinea)) filtro.disponible = true;
+  if (detectarUbicacion(ultimaLinea)) filtro.ubicacion = true;
+
+  const decision = await consultarGroq(nombre, contexto);
+
+  if (decision.notificar || detectarPreguntaMedidas(ultimaLinea)) {
+    console.log(`📏 ${nombre} pregunta por medidas. Avisando al vendedor...`);
+    await enviarAlerta('Pregunta de medidas', `👤 ${nombre}\n💬 ${ultimaLinea || preview}`);
+    filtro.ts = Date.now();
+    state.filtros.set(nombre, filtro);
+    return true;
+  }
+
+  let respondido = false;
   if (decision.action === 'reply' && decision.message) {
     console.log(`✅ Groq decide responder: "${decision.message.slice(0, 80)}..."`);
     const enviado = await enviarMensaje(decision.message);
     if (enviado) {
       console.log('📤 Respuesta enviada');
+      respondido = true;
     }
-
-    if (decision.isBuyer) {
-      await sendWhatsApp(nombre, preview);
-    }
-
-    return decision.isBuyer;
   }
+
+  if (decision.isBuyer && decision.action === 'reply') {
+    await sendWhatsApp(nombre, preview);
+    filtro.avisado = true;
+  } else if (!filtro.avisado && filtro.disponible && filtro.ubicacion) {
+    filtro.avisado = true;
+    console.log(`👀 ${nombre}: superó los 2 filtros. Avisando al vendedor...`);
+    await enviarAlerta('Comprador interesado', `👤 ${nombre}\n💬 ${ultimaLinea || preview}`);
+  }
+
+  filtro.ts = Date.now();
+  state.filtros.set(nombre, filtro);
 
   if (decision.action === 'ignore') {
-    console.log(`⏭ Groq decide ignorar (${decision.error ? 'error' : 'sin coincidencia'})`);
+    if (decision.rateLimit) {
+      console.log(`⏸ Groq en rate-limit (${nombre}). Se omitirá el aviso (fallo temporal de la API).`);
+      return false;
+    }
+    const motivo = decision.error ? 'error al consultar la IA' : 'sin coincidencia';
+    console.log(`⏭ Groq decide ignorar (${motivo})`);
+    await enviarAlerta('Sin respuesta automática', `👤 ${nombre}\n💬 ${ultimaLinea || preview}\n🤖 El bot no respondió (${motivo}).`);
+    return false;
   }
 
-  return false;
+  return respondido || false;
 }
 
 /**

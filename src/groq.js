@@ -160,6 +160,48 @@ function detectarPreguntaMedidas(texto) {
   return REGEX_MEDIDAS.test(texto);
 }
 
+/** Patrones del filtro 1: el comprador pregunta si el producto está disponible. */
+const REGEX_DISPONIBILIDAD = /\b(disponible|tienes|vendes|publicad|anuncio|hay|todavía|aún vendes|sigue estando|sigue disponible)\b/i;
+
+/**
+ * Detecta si el último mensaje del comprador pregunta por disponibilidad
+ * del producto (filtro 1 del embudo de venta).
+ * @param {string} texto - Último mensaje del comprador.
+ * @returns {boolean} true si pregunta por disponibilidad.
+ */
+function detectarDisponibilidad(texto) {
+  if (!texto) return false;
+  return REGEX_DISPONIBILIDAD.test(texto);
+}
+
+/** Patrones del filtro 2: el comprador pregunta por ubicación, envíos o dónde te ubicas. */
+const REGEX_UBICACION = /\b(ubicación|ubicacion|dirección|direccion|donde estás|dónde estás|dónde te ubicas|donde te ubicas|zona|colonia|envío|envios|envías|envias|domicilio|mandas|mandar|estás ubicado|estás|te ubicas)\b/i;
+
+/**
+ * Detecta si el último mensaje del comprador pregunta por ubicación o envíos
+ * (filtro 2 del embudo de venta).
+ * @param {string} texto - Último mensaje del comprador.
+ * @returns {boolean} true si pregunta por ubicación/envíos.
+ */
+function detectarUbicacion(texto) {
+  if (!texto) return false;
+  return REGEX_UBICACION.test(texto);
+}
+
+/** Patrones de venta: el comprador comparte su ubicación o dice dónde está. */
+const REGEX_UBICACION_COMPARTIDA = /\b(estoy en|me encuentro en|soy de|vivo en|te paso mi ubicación|te paso mi ubicacion|te mando mi ubicación|te mando mi ubicacion|te comparto mi ubicación|te comparto mi ubicacion|mi dirección es|mi direccion es|aquí está mi dirección|aquí esta mi direccion|voy para allá|voy para alla|ya voy|en camino|ahí voy|ahi voy|pásame la dirección|pasame la direccion|te espero)\b|\bhttps?:\/\/maps|mapa\b/i;
+
+/**
+ * Detecta si el comprador compartió su ubicación o dijo dónde está
+ * (posible venta: el bot NO responde y avisa al vendedor).
+ * @param {string} texto - Último mensaje del comprador.
+ * @returns {boolean} true si compartió ubicación.
+ */
+function detectarUbicacionCompartida(texto) {
+  if (!texto) return false;
+  return REGEX_UBICACION_COMPARTIDA.test(texto);
+}
+
 /**
  * Extrae la última línea del comprador del historial scrapeado.
  * @param {string} historialRaw - Texto completo del historial.
@@ -289,7 +331,13 @@ async function consultarGroq(nombre, nuevoMensaje) {
   historialConv.push({ role: 'user', content: nuevoMensaje });
   state.historial.set(nombre, historialConv);
 
-  return { action: 'ignore', message: '', isBuyer: false, error: true };
+  const fueRateLimit = lastError && (lastError.message?.includes('429') || lastError.message?.includes('rate_limit'));
+
+  return { action: 'ignore', message: '', isBuyer: false, error: true, rateLimit: fueRateLimit };
 }
 
-module.exports = { consultarGroq, detectarPreguntaDirecta, detectarPreguntaMedidas, ultimaLineaComprador };
+module.exports = {
+  consultarGroq, detectarPreguntaDirecta, detectarPreguntaMedidas,
+  detectarDisponibilidad, detectarUbicacion, detectarUbicacionCompartida,
+  ultimaLineaComprador,
+};

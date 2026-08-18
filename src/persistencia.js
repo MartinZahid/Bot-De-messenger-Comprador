@@ -9,6 +9,7 @@ const TIEMPO_PODA_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_PROCESADOS = 2000;
 const MAX_HUMAN_HANDLED = 1000;
 const MAX_PUBLICACIONES = 500;
+const MAX_FILTROS = 1000;
 
 /**
  * Poda las estructuras de estado: elimina entradas más antiguas que
@@ -54,6 +55,19 @@ function podarEstado() {
       .sort((a, b) => (b[1] || 0) - (a[1] || 0));
     state.humanHandled = new Map(ordenado.slice(0, MAX_HUMAN_HANDLED));
   }
+
+  for (const [nombre, filtro] of state.filtros) {
+    const ts = filtro && filtro.ts ? filtro.ts : 0;
+    if (ts && ahora - ts > TIEMPO_PODA_MS) {
+      state.filtros.delete(nombre);
+    }
+  }
+
+  if (state.filtros.size > MAX_FILTROS) {
+    const ordenado = Array.from(state.filtros.entries())
+      .sort((a, b) => (b[1]?.ts || 0) - (a[1]?.ts || 0));
+    state.filtros = new Map(ordenado.slice(0, MAX_FILTROS));
+  }
 }
 
 /**
@@ -68,6 +82,7 @@ async function guardarEstado() {
       historial: Array.from(state.historial.entries()),
       humanHandled: Array.from(state.humanHandled.entries()),
       publicaciones: Array.from(state.publicaciones.entries()),
+      filtros: Array.from(state.filtros.entries()),
       bootstrapDone: state.bootstrapDone,
       timestamp: new Date().toISOString(),
     };
@@ -127,9 +142,19 @@ async function cargarEstado() {
         return [nombre, { titulo: '', precio: String(valor || ''), ts: Date.now() }];
       }));
     }
+    if (data.filtros) {
+      state.filtros = new Map(data.filtros.map(([nombre, valor]) => [
+        nombre, {
+          disponible: !!(valor && valor.disponible),
+          ubicacion: !!(valor && valor.ubicacion),
+          avisado: !!(valor && valor.avisado),
+          ts: (valor && valor.ts) || Date.now(),
+        },
+      ]));
+    }
 
     podarEstado();
-    console.log(`📦 Estado cargado: ${state.processed.size} procesados, ${state.historial.size} historiales, ${state.humanHandled.size} con respuesta humana, ${state.publicaciones.size} publicaciones`);
+    console.log(`📦 Estado cargado: ${state.processed.size} procesados, ${state.historial.size} historiales, ${state.humanHandled.size} con respuesta humana, ${state.publicaciones.size} publicaciones, ${state.filtros.size} filtros`);
     return true;
   } catch (err) {
     if (err.code === 'ENOENT') {

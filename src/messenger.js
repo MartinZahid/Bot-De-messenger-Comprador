@@ -17,6 +17,27 @@ const { SEL, SISTEMA, SISTEMA_AVISOS, sleep, rnd } = require('./config');
  */
 
 /**
+ * Normaliza el nombre de una conversación para usarlo como clave estable en
+ * los Map de estado (processed, filtros, historial, publicaciones).
+ *
+ * Convierte a minúsculas y colapsa espacios/saltos de línea. NO toca el
+ * identificador de la publicación: dos publicaciones distintas (p. ej.
+ * "Esperanza · Cortinas Blackout Para ventana 280x220cm" vs
+ * "Esperanza · Cortinas blackout") siguen siendo claves separadas, pero una
+ * misma conversación cuyo título varíe en mayúsculas o en saltos de línea
+ * mantiene la misma clave.
+ *
+ * @param {string} nombre - Nombre crudo extraído del sidebar.
+ * @returns {string} Clave normalizada.
+ */
+function normalizarClave(nombre) {
+  return String(nombre || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Obtiene la lista de conversaciones visibles en el sidebar de Marketplace.
  * Extrae nombre, preview, último mensaje relevante y clasifica cada una.
  *
@@ -73,7 +94,9 @@ async function obtenerConversaciones() {
       if (!c.nombre.includes(' · ')) return false;
       return true;
     });
-  }, SEL.CONV_LINK, SEL.SPANS, SISTEMA, SISTEMA_AVISOS);
+  }, SEL.CONV_LINK, SEL.SPANS, SISTEMA, SISTEMA_AVISOS).then(lista =>
+    lista.map(c => ({ ...c, clave: normalizarClave(c.nombre) }))
+  );
 }
 
 /**
@@ -386,4 +409,5 @@ module.exports = {
   encontrarInput,
   enviarMensaje,
   clickMarketplaceTab,
+  normalizarClave,
 };

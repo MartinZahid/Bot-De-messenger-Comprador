@@ -95,8 +95,9 @@ async function navegarAMarketplace() {
  * @param {{nombre: string, preview: string, indice: number}} conv - Conversación a procesar.
  * @returns {Promise<boolean>} true si se procesó un comprador real.
  */
-async function procesarConversacion({ nombre, preview, indice }) {
+async function procesarConversacion({ nombre, clave, preview, indice }) {
   const { page } = state;
+  const ck = clave || nombre;
   console.log(`🔍 Procesando: ${nombre} — "${preview.slice(0, 80)}"`);
 
   const enlaces = await page.$$(SEL?.CONV_LINK);
@@ -127,10 +128,10 @@ async function procesarConversacion({ nombre, preview, indice }) {
   try {
     const publicacion = await scrapearPublicacion();
     if (publicacion && publicacion.titulo && publicacion.precio) {
-      state.publicaciones.set(nombre, { ...publicacion, ts: Date.now() });
+      state.publicaciones.set(ck, { ...publicacion, ts: Date.now() });
       console.log(`🏷 Publicación detectada: "${publicacion.titulo}" — ${publicacion.precio}`);
-    } else if (!state.publicaciones.has(nombre)) {
-      state.publicaciones.set(nombre, { titulo: '', precio: '', ts: Date.now() });
+    } else if (!state.publicaciones.has(ck)) {
+      state.publicaciones.set(ck, { titulo: '', precio: '', ts: Date.now() });
     }
   } catch (e) {
     console.log(`⚠ No se pudo leer la publicación: ${e.message}`);
@@ -143,27 +144,27 @@ async function procesarConversacion({ nombre, preview, indice }) {
     return false;
   }
 
-  const filtro = state.filtros.get(nombre) || { disponible: false, ubicacion: false, avisado: false, ts: Date.now() };
+  const filtro = state.filtros.get(ck) || { disponible: false, ubicacion: false, avisado: false, ts: Date.now() };
 
   if (detectarUbicacionCompartida(ultimaLinea)) {
     console.log(`🛒 ${nombre}: compartió su ubicación. Avisando posible venta...`);
     await enviarAlerta('Posible venta', `👤 ${nombre}\n💬 ${ultimaLinea || preview}`);
     filtro.avisado = true;
     filtro.ts = Date.now();
-    state.filtros.set(nombre, filtro);
+    state.filtros.set(ck, filtro);
     return true;
   }
 
   if (detectarDisponibilidad(ultimaLinea)) filtro.disponible = true;
   if (detectarUbicacion(ultimaLinea)) filtro.ubicacion = true;
 
-  const decision = await consultarGroq(nombre, contexto);
+  const decision = await consultarGroq(ck, contexto);
 
   if (decision.notificar || detectarPreguntaMedidas(ultimaLinea)) {
     console.log(`📏 ${nombre} pregunta por medidas. Avisando al vendedor...`);
     await enviarAlerta('Pregunta de medidas', `👤 ${nombre}\n💬 ${ultimaLinea || preview}`);
     filtro.ts = Date.now();
-    state.filtros.set(nombre, filtro);
+    state.filtros.set(ck, filtro);
     return true;
   }
 
@@ -187,7 +188,7 @@ async function procesarConversacion({ nombre, preview, indice }) {
   }
 
   filtro.ts = Date.now();
-  state.filtros.set(nombre, filtro);
+  state.filtros.set(ck, filtro);
 
   if (decision.action === 'ignore') {
     if (decision.rateLimit) {
@@ -228,11 +229,12 @@ async function cicloPrincipal() {
 
     if (!state.bootstrapDone) {
       for (const c of conversaciones) {
+        const ck = c.clave || c.nombre;
         if (c.esPropio) {
-          state.processed.set(c.nombre, { hash: hash(`${c.nombre}|${c.ultimo}`), ts: Date.now() });
+          state.processed.set(ck, { hash: hash(`${ck}|${c.ultimo}`), ts: Date.now() });
         }
         if (c.esHumano) {
-          state.humanHandled.set(c.nombre, Date.now());
+          state.humanHandled.set(ck, Date.now());
         }
       }
       state.bootstrapDone = true;
@@ -243,12 +245,14 @@ async function cicloPrincipal() {
     const pendientes = [];
     for (const conv of conversaciones) {
       if (conv.esPropio || conv.esSistema || conv.esSticker) continue;
-      if (state.humanHandled.has(conv.nombre)) continue;
-      if (conv.esHumano) { state.humanHandled.set(conv.nombre, Date.now()); continue; }
-      const clave = hash(`${conv.nombre}|${conv.ultimo}`);
-      const previo = state.processed.get(conv.nombre);
+      const ck = conv.clave || conv.nombre;
+      if (state.humanHandled.has(ck)) continue;
+      if (conv.esHumano) { state.humanHandled.set(ck, Date.now()); continue; }
+      const ultimoComprador = ultimaLineaComprador(conv.ultimo || '') || conv.ultimo || '';
+      const clave = hash(`${ck}|${ultimoComprador.trim()}`);
+      const previo = state.processed.get(ck);
       if (previo && previo.hash === clave) continue;
-      state.processed.set(conv.nombre, { hash: clave, ts: Date.now() });
+      state.processed.set(ck, { hash: clave, ts: Date.now() });
       pendientes.push(conv);
       if (pendientes.length >= BATCH_SIZE) break;
     }

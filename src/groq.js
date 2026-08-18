@@ -218,6 +218,62 @@ function ultimaLineaComprador(historialRaw) {
 }
 
 /**
+ * Patrones de ruido de la UI de Messenger que no deben guardarse en el
+ * historial de Groq (inflarían cada request con cientos de tokens).
+ */
+const RUIDO_UI = [
+  /^presionar enter[,:]?\s*$/i,
+  /^presionar enter,/i,
+  /^mensaje enviado/i,
+  /^envía una respuesta rápida/i,
+  /^envia una respuesta rapida/i,
+  /^toca una respuesta para enviársela/i,
+  /^enviar$/i,
+  /^silenciar$/i,
+  /^buscar$/i,
+  /^personalizar chat/i,
+  /^miembros del chat/i,
+  /^multimedia, archivos y enlaces/i,
+  /^privacidad y ayuda/i,
+  /^\d{1,2}:\d{2}\s*(am|pm|a\.?m|p\.?m)?$/i,
+];
+
+/**
+ * Limpia el texto scrapeado del chat: conserva solo líneas "Vendedor:" /
+ * "Comprador:" con su contenido y elimina el ruido de la UI de Messenger.
+ *
+ * @param {string} raw - Texto completo del historial scrapeado.
+ * @returns {string} Texto limpio, solo con mensajes de la conversación.
+ */
+function limpiarRuido(raw) {
+  if (!raw) return '';
+  return String(raw)
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => {
+      if (!l) return false;
+      const contenido = l.replace(/^(Vendedor|Comprador):\s*/, '');
+      if (RUIDO_UI.some(re => re.test(contenido))) return false;
+      return true;
+    })
+    .join('\n');
+}
+
+/**
+ * Agrega una entrada al historial de la conversación sin duplicar el
+ * contenido si es idéntico a la última entrada ya guardada.
+ *
+ * @param {Array<{role: string, content: string}>} historialConv - Historial de la conversación.
+ * @param {string} role - 'user' o 'assistant'.
+ * @param {string} contenido - Texto limpio a guardar.
+ */
+function agregarAlHistorial(historialConv, role, contenido) {
+  const ultimo = historialConv[historialConv.length - 1];
+  if (ultimo && ultimo.role === role && ultimo.content === contenido) return;
+  historialConv.push({ role, content: contenido });
+}
+
+/**
  * Consulta a Groq con backoff exponencial en caso de error.
  *
  * @param {string} nombre - Nombre del comprador/conversación.
@@ -228,10 +284,11 @@ async function consultarGroq(nombre, nuevoMensaje) {
   const historialConv = state.historial.get(nombre) || [];
   const publicacion = state.publicaciones.get(nombre) || null;
   const precioDetectado = publicacion && publicacion.precio ? publicacion.precio : '';
+  const nuevoMensajeLimpio = limpiarRuido(nuevoMensaje);
 
-  if (detectarPreguntaMedidas(ultimaLineaComprador(nuevoMensaje))) {
+  if (detectarPreguntaMedidas(ultimaLineaComprador(nuevoMensajeLimpio))) {
     console.log(`📏 ${nombre} pregunta por medidas. Sin respuesta automática; se avisa al vendedor.`);
-    historialConv.push({ role: 'user', content: nuevoMensaje });
+    agregarAlHistorial(historialConv, 'user', nuevoMensajeLimpio);
     state.historial.set(nombre, historialConv);
     return { action: 'ignore', message: '', isBuyer: false, notificar: true };
   }
@@ -244,7 +301,7 @@ async function consultarGroq(nombre, nuevoMensaje) {
     { role: 'system', content: SYSTEM_PROMPT },
     ...historialConv.slice(-MAX_HISTORIAL),
     ...(contextoPublicacion ? [{ role: 'system', content: contextoPublicacion }] : []),
-    { role: 'user', content: nuevoMensaje },
+    { role: 'user', content: nuevoMensajeLimpio },
   ];
 
   console.log(`🤖 Consultando Groq (${GROQ_MODEL}) para ${nombre}...`);
@@ -280,8 +337,8 @@ async function consultarGroq(nombre, nuevoMensaje) {
       }
 
       if (parsed.action === 'ignore') {
-        const ultimaLineaComprador = nuevoMensaje.split('\n').reverse().find(l => l.startsWith('Comprador:')) || '';
-        const respuestaForzada = detectarPreguntaDirecta(ultimaLineaComprador, nuevoMensaje, precioDetectado);
+        const ultimaLineaComprador = nuevoMensajeLimpio.split('\n').reverse().find(l => l.startsWith('Comprador:')) || '';
+        const respuestaForzada = detectarPreguntaDirecta(ultimaLineaComprador, nuevoMensajeLimpio, precioDetectado);
         if (respuestaForzada) {
           console.log(`⚠ Groq ignoró, pero se detectó pregunta directa. Forzando reply.`);
           parsed.action = 'reply';
@@ -292,9 +349,9 @@ async function consultarGroq(nombre, nuevoMensaje) {
         }
       }
 
-      historialConv.push({ role: 'user', content: nuevoMensaje });
+      agregarAlHistorial(historialConv, 'user', nuevoMensajeLimpio);
       if (parsed.action === 'reply' && parsed.message) {
-        historialConv.push({ role: 'assistant', content: parsed.message });
+        agregarAlHistorial(historialConv, 'assistant', parsed.message);
       }
       if (historialConv.length > MAX_HISTORIAL * 2) {
         state.historial.set(nombre, historialConv.slice(-MAX_HISTORIAL));
@@ -328,7 +385,7 @@ async function consultarGroq(nombre, nuevoMensaje) {
 
   console.error(`❌ Error al consultar Groq tras ${GROQ_MAX_RETRIES} reintentos: ${lastError?.message}`);
 
-  historialConv.push({ role: 'user', content: nuevoMensaje });
+  agregarAlHistorial(historialConv, 'user', nuevoMensajeLimpio);
   state.historial.set(nombre, historialConv);
 
   const fueRateLimit = lastError && (lastError.message?.includes('429') || lastError.message?.includes('rate_limit'));
@@ -339,5 +396,5 @@ async function consultarGroq(nombre, nuevoMensaje) {
 module.exports = {
   consultarGroq, detectarPreguntaDirecta, detectarPreguntaMedidas,
   detectarDisponibilidad, detectarUbicacion, detectarUbicacionCompartida,
-  ultimaLineaComprador,
+  ultimaLineaComprador, limpiarRuido, agregarAlHistorial,
 };

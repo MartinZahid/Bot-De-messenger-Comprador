@@ -38,11 +38,15 @@ app.get('/chats', async (_req, res) => {
     const chats = await obtenerConversaciones();
     res.json({
       total: chats.length,
-      chats: chats.map(c => ({
-        nombre: c.nombre,
-        preview: c.preview.slice(0, 100),
-        procesado: state.processed.get(c.nombre)?.hash === hash(`${c.nombre}|${c.ultimo}`),
-      })),
+      chats: chats.map(c => {
+        const ck = c.clave || c.nombre;
+        return {
+          nombre: c.nombre,
+          clave: ck,
+          preview: c.preview.slice(0, 100),
+          procesado: state.processed.get(ck)?.hash === hash(`${ck}|${c.ultimo}`),
+        };
+      }),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

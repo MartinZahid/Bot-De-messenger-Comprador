@@ -10,12 +10,12 @@ const COOKIES_SAVE_INTERVAL_MS = 5 * 60 * 1000;
 let ultimaGrabacionCookies = 0;
 
 /**
- * Lanza Chromium headless, carga cookies de messenger.com y navega
- * a la bandeja de entrada. Marca state.ready = true al completar.
+ * Cierra el navegador anterior (si hay) y lanza Chromium headless con una
+ * página nueva lista para usar (viewport + user agent). No carga cookies.
  *
  * @throws {Error} Si no hay Chromium disponible.
  */
-async function iniciarBrowser() {
+async function lanzarNavegador() {
   if (state.browser) {
     try { await state.browser.close(); } catch (e) {
       console.warn(`⚠ Error cerrando browser anterior: ${e.message}`);
@@ -61,12 +61,22 @@ async function iniciarBrowser() {
   await state.page.setUserAgent(
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   );
+}
+
+/**
+ * Lanza Chromium headless, carga cookies de messenger.com y navega
+ * a la bandeja de entrada. Marca state.ready = true al completar.
+ *
+ * @throws {Error} Si no hay Chromium disponible.
+ */
+async function iniciarBrowser() {
+  await lanzarNavegador();
 
   const { cookies, faltan } = await cargarCookies();
-  await state.page.setCookie(...cookies);
+  if (cookies.length) await state.page.setCookie(...cookies);
   console.log(`🍪 ${cookies.length} cookies cargadas correctamente`);
   if (faltan) {
-    console.warn('⚠ cookies.json está vacío o incompleto. La sesión requerirá inicio de sesión manual.');
+    console.warn('⚠ cookies.json está vacío o incompleto. Inicia sesión desde /login en el navegador.');
   }
 
   await state.page.goto('https://www.messenger.com', {
@@ -201,6 +211,7 @@ async function cerrarDialogos() {
  * Marca state.ready = false durante la transición.
  */
 async function reiniciarBrowser() {
+  if (state.loginMode) return;
   console.log('🔄 Reiniciando navegador...');
   state.ready = false;
   try {
@@ -281,4 +292,4 @@ async function configurarMutationObserver() {
   }
 }
 
-module.exports = { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, configurarMutationObserver, guardarCookies };
+module.exports = { lanzarNavegador, iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, configurarMutationObserver, guardarCookies };

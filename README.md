@@ -4,7 +4,7 @@ Bot automatizado para Facebook Messenger que filtra compradores en la bandeja de
 
 ## Cómo funciona
 
-1. **Inicia sesión** en messenger.com con cookies exportadas desde el navegador (`cookies.json`)
+1. **Inicia sesión** en messenger.com: desde la página `/login` del bot (login remoto) o con cookies exportadas (`cookies.json`)
 2. **Lee la tarjetita de la publicación** (título + precio) de cada conversación de Marketplace para dar contexto al AI
 3. **Escanea cada ~20s** la bandeja de entrada de Marketplace buscando mensajes nuevos de compradores
 4. **Lee el contexto completo** de cada conversación (historial de mensajes)
@@ -59,8 +59,36 @@ Variables de entorno (`.env`):
 | `GROQ_MODEL` | No | Modelo Groq (default: llama-3.3-70b-versatile) |
 | `POLL_INTERVAL` | No | Intervalo entre ciclos en ms (default: 20000, min: 10000) |
 | `PORT` | No | Puerto HTTP (default: 10000) |
+| `HOST` | No | Interfaz donde escucha el servidor HTTP (default: `0.0.0.0`). Usa `127.0.0.1` con Cloudflare Tunnel |
+| `LOGIN_PASSWORD` | No | Contraseña de la página `/login` (login remoto). Si no se define, `/login` queda desactivado |
 
 > **Nota sobre números MX**: WhatsApp usa el prefijo `521` (52 + "1" de celular) en los JID. Configurar `WHATSAPP_TO` sin el `1` hará que el mensaje se "envíe" pero nunca llegue.
+
+## Iniciar sesión de Messenger sin cookies (login remoto)
+
+En lugar de exportar y subir `cookies.json`, puedes iniciar sesión directamente en el navegador del servidor:
+
+1. En `.env` pon `LOGIN_PASSWORD=una-contraseña-larga` y reinicia el bot.
+2. Abre `http://IP_DEL_SERVIDOR:PUERTO/login` desde el celular o la PC (usuario: cualquiera, contraseña: `LOGIN_PASSWORD`).
+3. Pulsa **Iniciar login**. Verás la pantalla del navegador del servidor:
+   - Toca un campo en la imagen y escribe directo con el teclado del celular o de la PC.
+   - También hay botones Enter / Tab / Borrar / Esc (sirve igual para el código de verificación en dos pasos).
+   - En el celular la pantalla del servidor se ajusta a un ancho menor para que el formulario se vea grande.
+4. Cuando ya veas tus chats, pulsa **Ya inicié sesión: guardar**. La sesión se guarda en `cookies.json` y el bot se reinicia solo.
+
+Cuando la sesión expire, el bot te avisa por WhatsApp y solo tienes que repetir estos pasos.
+
+> **Seguridad**: entra siempre por `https://`. Si entras por `http://IP:PUERTO`, la contraseña de Facebook viaja sin cifrar.
+
+### Con Cloudflare Tunnel (recomendado)
+
+Si el servidor ya usa Cloudflare Tunnel (`cloudflared`), publica el bot con un subdominio:
+
+1. Cloudflare → Zero Trust → Networks → Tunnels → tu túnel → **Public Hostname** → *Add*:
+   subdominio `bot`, tu dominio, servicio `HTTP` → `localhost:10000`.
+   (Si configuras el túnel por archivo, agrega en `config.yml`: `- hostname: bot.tudominio.com` / `service: http://localhost:10000`, antes de la regla `http_status:404`.)
+2. En `.env` pon `HOST=127.0.0.1` para que el puerto 10000 no quede abierto a internet; solo se entra por el túnel.
+3. Reinicia el bot y entra a `https://bot.tudominio.com/login`.
 
 ## WhatsApp (notificaciones)
 
@@ -94,9 +122,10 @@ Edita `src/config.js` (`DECISION_RULES` y `BUSINESS_RULES`) para ajustar el comp
 |------|-------------|
 | `/` | Estado del bot |
 | `/health` | Health check (200/503) |
-| `/chats` | Conversaciones de Marketplace visibles |
-| `/ss` | Captura de pantalla actual |
-| `/debug-input` | Diagnóstico del cuadro de texto |
+| `/chats` | Conversaciones de Marketplace visibles (requiere `LOGIN_PASSWORD`) |
+| `/ss` | Captura de pantalla actual (requiere `LOGIN_PASSWORD`) |
+| `/debug-input` | Diagnóstico del cuadro de texto (requiere `LOGIN_PASSWORD`) |
+| `/login` | Login remoto de Messenger (requiere `LOGIN_PASSWORD`) |
 
 ## Funcionalidades clave
 

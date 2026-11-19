@@ -25,6 +25,12 @@ module.exports = {
   busy: false,
   idle: false,
   bootstrapDone: false,
+  /** true mientras el usuario inicia sesión desde /login (el bot se pausa) */
+  loginMode: false,
+  /** true cuando el bot arrancó al menos una vez (loop de polling activo) */
+  arrancado: false,
+  /** true mientras el arranque inicial está lanzando el navegador */
+  iniciando: false,
   /** @type {Map<string, {hash: string, ts: number}>} nombre → hash del último mensaje + timestamp */
   processed: new Map(),
   /** @type {Map<string, Array<{role: string, content: string}>>} nombre → historial de chat con Groq */

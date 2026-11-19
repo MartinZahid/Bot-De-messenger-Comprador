@@ -110,9 +110,9 @@ Edita `src/config.js` (`DECISION_RULES` y `BUSINESS_RULES`) para ajustar el comp
 |------|-------------|
 | `/` | Estado del bot |
 | `/health` | Health check (200/503) |
-| `/chats` | Conversaciones de Marketplace visibles |
-| `/ss` | Captura de pantalla actual |
-| `/debug-input` | Diagnóstico del cuadro de texto |
+| `/chats` | Conversaciones de Marketplace visibles (requiere `LOGIN_PASSWORD`) |
+| `/ss` | Captura de pantalla actual (requiere `LOGIN_PASSWORD`) |
+| `/debug-input` | Diagnóstico del cuadro de texto (requiere `LOGIN_PASSWORD`) |
 | `/login` | Login remoto de Messenger (requiere `LOGIN_PASSWORD`) |
 
 ## Funcionalidades clave

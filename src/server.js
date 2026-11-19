@@ -5,7 +5,7 @@ const state = require('./state');
 const { PORT, GROQ_MODEL, hash } = require('./config');
 const { obtenerConversaciones } = require('./messenger');
 const { enviarAlerta } = require('./whatsapp');
-const { router: loginRouter } = require('./login');
+const { router: loginRouter, auth } = require('./login');
 
 const app = express();
 
@@ -36,7 +36,7 @@ app.get('/health', (_req, res) => {
 /**
  * GET /chats — Lista las conversaciones visibles en Marketplace con su estado de procesamiento.
  */
-app.get('/chats', async (_req, res) => {
+app.get('/chats', auth, async (_req, res) => {
   if (!state.ready) return res.status(503).json({ error: 'Bot no listo' });
   try {
     const chats = await obtenerConversaciones();
@@ -60,7 +60,7 @@ app.get('/chats', async (_req, res) => {
 /**
  * GET /ss — Screenshot en base64 de la página actual del bot.
  */
-app.get('/ss', async (_req, res) => {
+app.get('/ss', auth, async (_req, res) => {
   if (!state.ready || !state.page) return res.status(503).json({ error: 'Bot no listo' });
   try {
     const img = await state.page.screenshot({ encoding: 'base64', fullPage: false });
@@ -74,7 +74,7 @@ app.get('/ss', async (_req, res) => {
  * GET /debug-input — Diagnóstico de todos los elementos de input visibles en el DOM.
  * Útil para debuggear por qué el bot no encuentra el cuadro de texto.
  */
-app.get('/debug-input', async (_req, res) => {
+app.get('/debug-input', auth, async (_req, res) => {
   if (!state.ready || !state.page) return res.status(503).json({ error: 'Bot no listo' });
   try {
     const url = state.page.url();
@@ -116,7 +116,7 @@ app.get('/debug-input', async (_req, res) => {
 /**
  * GET /test-whatsapp — Envía una notificación de prueba por la conexión viva del bot.
  */
-app.get('/test-whatsapp', async (_req, res) => {
+app.get('/test-whatsapp', auth, async (_req, res) => {
   try {
     const ok = await enviarAlerta('Prueba', 'Mensaje de prueba desde el bot');
     res.json({ enviado: ok, ready: state.ready });

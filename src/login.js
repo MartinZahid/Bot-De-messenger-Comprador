@@ -28,7 +28,7 @@ function igualSeguro(a, b) {
 /** Middleware de autenticación Basic (usuario: cualquiera, contraseña: LOGIN_PASSWORD). */
 function auth(req, res, next) {
   if (!LOGIN_PASSWORD) {
-    return res.status(404).send('Login remoto desactivado. Configura LOGIN_PASSWORD en .env');
+    return res.status(404).send('Ruta desactivada. Configura LOGIN_PASSWORD en .env');
   }
   const header = req.headers.authorization || '';
   const [tipo, valor] = header.split(' ');
@@ -224,4 +224,4 @@ refrescar();
 </script>
 </body></html>`;
 
-module.exports = { router };
+module.exports = { router, auth };

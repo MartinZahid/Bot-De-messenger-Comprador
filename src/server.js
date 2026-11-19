@@ -5,8 +5,12 @@ const state = require('./state');
 const { PORT, GROQ_MODEL, hash } = require('./config');
 const { obtenerConversaciones } = require('./messenger');
 const { enviarAlerta } = require('./whatsapp');
+const { router: loginRouter } = require('./login');
 
 const app = express();
+
+/** /login — Login remoto de Messenger (protegido con LOGIN_PASSWORD). */
+app.use('/login', loginRouter);
 
 /**
  * GET / — Estado actual del bot en JSON.

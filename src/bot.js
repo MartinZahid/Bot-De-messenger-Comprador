@@ -225,13 +225,13 @@ async function procesarConversacion({ nombre, clave, preview, indice, href }) {
  * conversaciones nuevas por ciclo.
  */
 async function cicloPrincipal() {
-  if (state.busy || !state.ready) return;
+  if (state.busy || !state.ready || state.loginMode) return;
   state.busy = true;
 
   try {
     if (await detectarSesionExpirada()) {
       console.log('🔄 Sesión expirada, reiniciando navegador...');
-      await enviarAlerta('Sesión expirada', 'El bot se reinició automáticamente pero necesita cookies nuevas.');
+      await enviarAlerta('Sesión expirada', 'El bot necesita que inicies sesión de nuevo. Entra a http://TU_SERVIDOR:PUERTO/login');
       await reiniciarBrowser();
       fallosConsecutivos = 0;
       return;
@@ -365,7 +365,7 @@ async function start() {
     try {
       await cargarEstado();
       await iniciarBrowser();
-      iniciarServidor();
+      state.arrancado = true;
       setTimeout(async () => {
         await cicloPrincipal();
         programarSiguiente();
@@ -380,9 +380,20 @@ async function start() {
   };
 
   iniciarWhatsApp();
+  // El servidor arranca primero para que /login funcione aunque no haya sesión.
+  iniciarServidor();
 
   let intento = 1;
-  while (!(await iniciarTodo())) {
+  while (true) {
+    // Mientras el usuario inicia sesión desde /login, no tocar el navegador.
+    while (state.loginMode) await sleep(2000);
+    state.iniciando = true;
+    const ok = await iniciarTodo();
+    state.iniciando = false;
+    if (ok) break;
+    if (intento === 1) {
+      console.log('🔐 Si la sesión expiró o no hay cookies, entra a /login para iniciar sesión desde el navegador.');
+    }
     const espera = Math.min(30000, 5000 * intento);
     console.log(`🔄 Reintentando inicio en ${espera / 1000}s (intento ${intento})...`);
     await sleep(espera);

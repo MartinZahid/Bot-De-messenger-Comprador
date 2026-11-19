@@ -4,7 +4,7 @@ Bot automatizado para Facebook Messenger que filtra compradores en la bandeja de
 
 ## Cómo funciona
 
-1. **Inicia sesión** en messenger.com con cookies exportadas desde el navegador (`cookies.json`)
+1. **Inicia sesión** en messenger.com: desde la página `/login` del bot (login remoto) o con cookies exportadas (`cookies.json`)
 2. **Lee la tarjetita de la publicación** (título + precio) de cada conversación de Marketplace para dar contexto al AI
 3. **Escanea cada ~20s** la bandeja de entrada de Marketplace buscando mensajes nuevos de compradores
 4. **Lee el contexto completo** de cada conversación (historial de mensajes)
@@ -59,8 +59,24 @@ Variables de entorno (`.env`):
 | `GROQ_MODEL` | No | Modelo Groq (default: llama-3.3-70b-versatile) |
 | `POLL_INTERVAL` | No | Intervalo entre ciclos en ms (default: 20000, min: 10000) |
 | `PORT` | No | Puerto HTTP (default: 10000) |
+| `LOGIN_PASSWORD` | No | Contraseña de la página `/login` (login remoto). Si no se define, `/login` queda desactivado |
 
 > **Nota sobre números MX**: WhatsApp usa el prefijo `521` (52 + "1" de celular) en los JID. Configurar `WHATSAPP_TO` sin el `1` hará que el mensaje se "envíe" pero nunca llegue.
+
+## Iniciar sesión de Messenger sin cookies (login remoto)
+
+En lugar de exportar y subir `cookies.json`, puedes iniciar sesión directamente en el navegador del servidor:
+
+1. En `.env` pon `LOGIN_PASSWORD=una-contraseña-larga` y reinicia el bot.
+2. Abre `http://IP_DEL_SERVIDOR:PUERTO/login` desde el celular o la PC (usuario: cualquiera, contraseña: `LOGIN_PASSWORD`).
+3. Pulsa **Iniciar login**. Verás la pantalla del navegador del servidor:
+   - Toca un campo en la imagen, escribe en la caja de texto y pulsa **Enviar texto**.
+   - Usa los botones Enter / Tab / Borrar cuando haga falta (también sirve para el código de verificación en dos pasos).
+4. Cuando ya veas tus chats, pulsa **Ya inicié sesión: guardar**. La sesión se guarda en `cookies.json` y el bot se reinicia solo.
+
+Cuando la sesión expire, el bot te avisa por WhatsApp y solo tienes que repetir estos pasos.
+
+> **Seguridad**: si entras por `http://` (sin la "s"), la contraseña de Facebook que escribes viaja sin cifrar. Lo más seguro es un túnel SSH: `ssh -L 10000:localhost:10000 usuario@servidor` y abrir `http://localhost:10000/login` en tu PC.
 
 ## WhatsApp (notificaciones)
 
@@ -97,6 +113,7 @@ Edita `src/config.js` (`DECISION_RULES` y `BUSINESS_RULES`) para ajustar el comp
 | `/chats` | Conversaciones de Marketplace visibles |
 | `/ss` | Captura de pantalla actual |
 | `/debug-input` | Diagnóstico del cuadro de texto |
+| `/login` | Login remoto de Messenger (requiere `LOGIN_PASSWORD`) |
 
 ## Funcionalidades clave
 

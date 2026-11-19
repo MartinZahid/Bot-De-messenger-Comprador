@@ -59,6 +59,7 @@ Variables de entorno (`.env`):
 | `GROQ_MODEL` | No | Modelo Groq (default: llama-3.3-70b-versatile) |
 | `POLL_INTERVAL` | No | Intervalo entre ciclos en ms (default: 20000, min: 10000) |
 | `PORT` | No | Puerto HTTP (default: 10000) |
+| `HOST` | No | Interfaz donde escucha el servidor HTTP (default: `0.0.0.0`). Usa `127.0.0.1` con Cloudflare Tunnel |
 | `LOGIN_PASSWORD` | No | Contraseña de la página `/login` (login remoto). Si no se define, `/login` queda desactivado |
 
 > **Nota sobre números MX**: WhatsApp usa el prefijo `521` (52 + "1" de celular) en los JID. Configurar `WHATSAPP_TO` sin el `1` hará que el mensaje se "envíe" pero nunca llegue.
@@ -76,7 +77,17 @@ En lugar de exportar y subir `cookies.json`, puedes iniciar sesión directamente
 
 Cuando la sesión expire, el bot te avisa por WhatsApp y solo tienes que repetir estos pasos.
 
-> **Seguridad**: si entras por `http://` (sin la "s"), la contraseña de Facebook que escribes viaja sin cifrar. Lo más seguro es un túnel SSH: `ssh -L 10000:localhost:10000 usuario@servidor` y abrir `http://localhost:10000/login` en tu PC.
+> **Seguridad**: entra siempre por `https://`. Si entras por `http://IP:PUERTO`, la contraseña de Facebook viaja sin cifrar.
+
+### Con Cloudflare Tunnel (recomendado)
+
+Si el servidor ya usa Cloudflare Tunnel (`cloudflared`), publica el bot con un subdominio:
+
+1. Cloudflare → Zero Trust → Networks → Tunnels → tu túnel → **Public Hostname** → *Add*:
+   subdominio `bot`, tu dominio, servicio `HTTP` → `localhost:10000`.
+   (Si configuras el túnel por archivo, agrega en `config.yml`: `- hostname: bot.tudominio.com` / `service: http://localhost:10000`, antes de la regla `http_status:404`.)
+2. En `.env` pon `HOST=127.0.0.1` para que el puerto 10000 no quede abierto a internet; solo se entra por el túnel.
+3. Reinicia el bot y entra a `https://bot.tudominio.com/login`.
 
 ## WhatsApp (notificaciones)
 

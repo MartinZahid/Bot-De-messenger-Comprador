@@ -129,8 +129,11 @@ app.get('/test-whatsapp', auth, async (_req, res) => {
  * Inicia el servidor Express en el puerto configurado.
  */
 function iniciarServidor() {
-  app.listen(PORT, () => {
-    console.log(`🌐 Servidor Express en puerto ${PORT}`);
+  // HOST=127.0.0.1 hace que solo sea accesible desde el propio servidor
+  // (por ejemplo, a través de un Cloudflare Tunnel). Por defecto escucha en todas las interfaces.
+  const host = process.env.HOST || '0.0.0.0';
+  app.listen(PORT, host, () => {
+    console.log(`🌐 Servidor Express en ${host}:${PORT}`);
   });
 }
 

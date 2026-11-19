@@ -1,6 +1,6 @@
 # Messenger Marketplace Bot
 
-Bot automatizado para Facebook Messenger que filtra compradores en la bandeja de entrada de Marketplace usando inteligencia artificial (Claude Haiku 5.5) y notifica por WhatsApp cuando detecta una venta potencial.
+Bot automatizado para Facebook Messenger que filtra compradores en la bandeja de entrada de Marketplace usando inteligencia artificial (Groq / LLaMA 3) y notifica por WhatsApp cuando detecta una venta potencial.
 
 ## Cómo funciona
 
@@ -8,7 +8,7 @@ Bot automatizado para Facebook Messenger que filtra compradores en la bandeja de
 2. **Lee la tarjetita de la publicación** (título + precio) de cada conversación de Marketplace para dar contexto al AI
 3. **Escanea cada ~20s** la bandeja de entrada de Marketplace buscando mensajes nuevos de compradores
 4. **Lee el contexto completo** de cada conversación (historial de mensajes)
-5. **Consulta a Claude** (Haiku 5.5) para analizar el mensaje y decidir si responder o ignorar
+5. **Consulta a Groq** (LLaMA 3) para analizar el mensaje y decidir si responder o ignorar
 6. **Responde automáticamente** con lenguaje natural, imitando el estilo del vendedor
 7. **Notifica por WhatsApp** solo cuando detecta un comprador con intención real de compra
 8. **Entra en modo reposo** (5 min) si no hay mensajes nuevos
@@ -19,7 +19,7 @@ Bot automatizado para Facebook Messenger que filtra compradores en la bandeja de
 |------------|------------|
 | Runtime | Node.js |
 | Navegador headless | Puppeteer / Chromium |
-| API de IA | Anthropic SDK (claude-haiku-5-5) |
+| API de IA | Groq SDK (llama-3.3-70b-versatile) |
 | Servidor HTTP | Express |
 | Notificaciones | WhatsApp (Baileys) |
 | Persistencia | JSON (estado.json) |
@@ -52,11 +52,11 @@ Variables de entorno (`.env`):
 
 | Variable | Obligatorio | Descripción |
 |----------|-------------|-------------|
-| `ANTHROPIC_API_KEY` | Sí | API Key de platform.claude.com |
+| `GROQ_API_KEY` | Sí | API Key de console.groq.com |
 | `WHATSAPP_TO` | No | Tu número personal (donde recibes avisos). Formato E.164 con prefijo `521` para celulares MX (ej. `5216371005468`) |
 | `WHATSAPP_NUMBER` | No | Número dedicado que actúa como remitente (se vincula 1 vez, ej. `5216623857440`) |
 | `CONTACTO_NUMERO` | No | Número que el bot comparte con los compradores |
-| `AI_MODEL` | No | Modelo de Claude (default: claude-haiku-5-5, el más barato) |
+| `GROQ_MODEL` | No | Modelo Groq (default: llama-3.3-70b-versatile) |
 | `POLL_INTERVAL` | No | Intervalo entre ciclos en ms (default: 20000, min: 10000) |
 | `PORT` | No | Puerto HTTP (default: 10000) |
 

@@ -1,21 +1,25 @@
 'use strict';
 
-const Anthropic = require('@anthropic-ai/sdk');
+const Groq = require('groq-sdk');
 const state = require('./state');
 const {
-  ANTHROPIC_KEY, AI_MODEL, MAX_HISTORIAL, SYSTEM_PROMPT,
+  GROQ_KEY, GROQ_MODEL, MAX_HISTORIAL, SYSTEM_PROMPT,
   GROQ_BACKOFF_BASE_MS, GROQ_BACKOFF_MAX_MS, GROQ_MAX_RETRIES,
   CONTACTO_NUMERO, sleep,
 } = require('./config');
 
-if (!ANTHROPIC_KEY) {
-  console.error('❌ ANTHROPIC_API_KEY no está configurada.');
-  console.error('   Obtén tu API Key en https://platform.claude.com');
+if (!GROQ_KEY) {
+  console.error('❌ GROQ_API_KEY no está configurada.');
+  console.error('   Obtén tu API Key gratis en https://console.groq.com');
   process.exit(1);
 }
 
-// maxRetries: 0 porque los reintentos con backoff se manejan abajo.
-const claude = new Anthropic({ apiKey: ANTHROPIC_KEY, maxRetries: 0 });
+if (GROQ_KEY.includes('gsk_') && GROQ_KEY.length > 20) {
+  const enmascarada = GROQ_KEY.slice(0, 6) + '****' + GROQ_KEY.slice(-4);
+  console.warn(`⚠ GROQ_API_KEY configurada (${enmascarada}). Asegúrate de no exponerla en el repositorio.`);
+}
+
+const groq = new Groq({ apiKey: GROQ_KEY });
 
 /**
  * Reglas de detección de preguntas directas del comprador.
@@ -293,45 +297,28 @@ async function consultarGroq(nombre, nuevoMensaje) {
     ? `Publicación: ${publicacion.titulo}\nPrecio: ${publicacion.precio || 'no detectado'}`
     : null;
 
-  // La API de Claude exige que el primer mensaje sea del usuario.
-  const historialReciente = historialConv.slice(-MAX_HISTORIAL);
-  while (historialReciente.length && historialReciente[0].role !== 'user') historialReciente.shift();
-
   const messages = [
-    ...historialReciente,
-    {
-      role: 'user',
-      content: contextoPublicacion ? `${contextoPublicacion}\n\n${nuevoMensajeLimpio}` : nuevoMensajeLimpio,
-    },
+    { role: 'system', content: SYSTEM_PROMPT },
+    ...historialConv.slice(-MAX_HISTORIAL),
+    ...(contextoPublicacion ? [{ role: 'system', content: contextoPublicacion }] : []),
+    { role: 'user', content: nuevoMensajeLimpio },
   ];
 
-  console.log(`🤖 Consultando Claude (${AI_MODEL}) para ${nombre}...`);
+  console.log(`🤖 Consultando Groq (${GROQ_MODEL}) para ${nombre}...`);
 
   let lastError = null;
 
   for (let intento = 0; intento <= GROQ_MAX_RETRIES; intento++) {
     try {
-      const respuesta = await claude.messages.create({
-        model: AI_MODEL,
-        max_tokens: 350,
-        // Sin razonamiento interno y esfuerzo bajo: menos tokens de salida.
-        thinking: { type: 'disabled' },
-        output_config: { effort: 'low' },
-        // El SYSTEM_PROMPT es igual en todas las llamadas: se cachea para abaratarlo.
-        system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      const completion = await groq.chat.completions.create({
         messages,
+        model: GROQ_MODEL,
+        temperature: 0.3,
+        max_tokens: 350,
       });
 
-      if (respuesta.stop_reason === 'refusal') {
-        throw new Error('Claude rechazó la solicitud (refusal)');
-      }
-
-      const raw = respuesta.content
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('');
-      const u = respuesta.usage;
-      console.log(`📩 Respuesta de Claude (in ${u.input_tokens} + cache ${u.cache_read_input_tokens || 0}, out ${u.output_tokens}): ${raw.slice(0, 120)}...`);
+      const raw = completion.choices[0]?.message?.content || '';
+      console.log(`📩 Respuesta de Groq: ${raw.slice(0, 120)}...`);
 
       let parsed;
       try {
@@ -353,7 +340,7 @@ async function consultarGroq(nombre, nuevoMensaje) {
         const ultimaLineaComprador = nuevoMensajeLimpio.split('\n').reverse().find(l => l.startsWith('Comprador:')) || '';
         const respuestaForzada = detectarPreguntaDirecta(ultimaLineaComprador, nuevoMensajeLimpio, precioDetectado);
         if (respuestaForzada) {
-          console.log(`⚠ Claude ignoró, pero se detectó pregunta directa. Forzando reply.`);
+          console.log(`⚠ Groq ignoró, pero se detectó pregunta directa. Forzando reply.`);
           parsed.action = 'reply';
           parsed.message = respuestaForzada.msg;
           if (respuestaForzada.isBuyer) {
@@ -379,15 +366,15 @@ async function consultarGroq(nombre, nuevoMensaje) {
       };
     } catch (err) {
       lastError = err;
-      const isRateLimit = err.status === 429;
-      const isServerError = err.status >= 500 || err instanceof Anthropic.APIConnectionError;
+      const isRateLimit = err.message?.includes('429') || err.message?.includes('rate_limit');
+      const isServerError = err.message?.includes('500') || err.message?.includes('503');
 
       if (intento < GROQ_MAX_RETRIES && (isRateLimit || isServerError)) {
         const backoff = Math.min(
           GROQ_BACKOFF_BASE_MS * Math.pow(2, intento),
           GROQ_BACKOFF_MAX_MS,
         );
-        console.warn(`⚠ Claude error (intento ${intento + 1}/${GROQ_MAX_RETRIES}): ${err.message}. Reintentando en ${backoff}ms...`);
+        console.warn(`⚠ Groq error (intento ${intento + 1}/${GROQ_MAX_RETRIES}): ${err.message}. Reintentando en ${backoff}ms...`);
         await sleep(backoff);
         continue;
       }
@@ -396,12 +383,12 @@ async function consultarGroq(nombre, nuevoMensaje) {
     }
   }
 
-  console.error(`❌ Error al consultar Claude tras ${GROQ_MAX_RETRIES} reintentos: ${lastError?.message}`);
+  console.error(`❌ Error al consultar Groq tras ${GROQ_MAX_RETRIES} reintentos: ${lastError?.message}`);
 
   agregarAlHistorial(historialConv, 'user', nuevoMensajeLimpio);
   state.historial.set(nombre, historialConv);
 
-  const fueRateLimit = lastError?.status === 429;
+  const fueRateLimit = lastError && (lastError.message?.includes('429') || lastError.message?.includes('rate_limit'));
 
   return { action: 'ignore', message: '', isBuyer: false, error: true, rateLimit: fueRateLimit };
 }

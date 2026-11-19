@@ -70,7 +70,7 @@ router.get('/ss', async (_req, res) => {
 });
 
 /** Pausa el bot y abre la pantalla de login de Messenger en el navegador del servidor. */
-router.post('/start', async (_req, res) => {
+router.post('/start', async (req, res) => {
   try {
     state.loginMode = true;
     state.ready = false;
@@ -80,6 +80,10 @@ router.post('/start', async (_req, res) => {
     if (!state.browser || !state.browser.connected || !state.page || state.page.isClosed()) {
       await lanzarNavegador();
     }
+    // En celular se usa una ventana más angosta para que el formulario se vea grande.
+    // Al terminar, el navegador se relanza con el tamaño normal (1280x800).
+    const movil = req.body && req.body.movil === true;
+    await state.page.setViewport(movil ? { width: 600, height: 900 } : { width: 1280, height: 800 });
     await state.page.goto('https://www.messenger.com/', { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {});
     console.log('🔐 Login remoto iniciado');
     res.json({ ok: true, url: state.page.url() });
@@ -158,67 +162,112 @@ const HTML = `<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Login del bot</title>
 <style>
-  body{font-family:system-ui,sans-serif;margin:0;padding:12px;background:#f4f4f5;color:#111}
-  h1{font-size:18px;margin:0 0 8px}
-  .barra{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
-  button{padding:8px 12px;border:0;border-radius:6px;background:#2563eb;color:#fff;font-size:14px}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,sans-serif;margin:0;padding:8px;background:#f4f4f5;color:#111}
+  h1{font-size:17px;margin:0 0 6px}
+  .barra{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+  button{padding:9px 12px;border:0;border-radius:6px;background:#2563eb;color:#fff;font-size:14px}
   button.gris{background:#52525b} button.verde{background:#16a34a}
-  input{flex:1;min-width:160px;padding:8px;font-size:16px;border:1px solid #ccc;border-radius:6px}
-  #ss{width:100%;max-width:1280px;border:1px solid #ccc;cursor:crosshair;display:block;background:#fff}
-  #estado{font-size:13px;color:#555}
+  #marco{position:relative;width:100%;max-width:1280px}
+  #ss{width:100%;border:2px solid #ccc;cursor:crosshair;display:block;background:#fff;min-height:120px}
+  #marco.activo #ss{border-color:#2563eb}
+  #teclado{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;font-size:16px}
+  #estado,#ayuda{font-size:13px;color:#555}
+  #ayuda b{color:#2563eb}
 </style></head><body>
 <h1>Iniciar sesión de Messenger en el servidor</h1>
 <div id="estado">Cargando…</div>
 <div class="barra">
-  <button onclick="post('start')">1. Iniciar login</button>
+  <button onclick="iniciar()">1. Iniciar login</button>
   <button class="verde" onclick="terminar()">2. Ya inicié sesión: guardar</button>
   <button class="gris" onclick="post('cancel')">Cancelar</button>
 </div>
-<div class="barra">
-  <input id="texto" placeholder="Escribe aquí y pulsa Enviar (toca antes el campo en la imagen)" autocomplete="off">
-  <button onclick="escribir()">Enviar texto</button>
-</div>
+<div id="ayuda">Toca un campo en la imagen y escribe con tu teclado. <b id="kbd"></b></div>
 <div class="barra">
   <button class="gris" onclick="tecla('Enter')">Enter</button>
   <button class="gris" onclick="tecla('Tab')">Tab</button>
   <button class="gris" onclick="tecla('Backspace')">Borrar</button>
   <button class="gris" onclick="tecla('Escape')">Esc</button>
 </div>
-<img id="ss" alt="Pantalla del servidor (pulsa Iniciar login)">
+<div id="marco">
+  <img id="ss" alt="Pantalla del servidor (pulsa Iniciar login)">
+  <input id="teclado" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+</div>
 <script>
 const img = document.getElementById('ss');
-async function post(ruta, cuerpo) {
-  const r = await fetch('/login/' + ruta, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo||{})});
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) alert(j.error || 'Error');
-  return j;
+const marco = document.getElementById('marco');
+const kb = document.getElementById('teclado');
+const ESPECIALES = ['Enter','Tab','Backspace','Escape','ArrowUp','ArrowDown'];
+const CENTINELA = '  ';
+
+// Cola para que las teclas lleguen al servidor en orden.
+let cola = Promise.resolve();
+function post(ruta, cuerpo) {
+  const p = cola.then(async () => {
+    const r = await fetch('/login/' + ruta, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo||{})});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) alert(j.error || 'Error');
+    pedirCaptura(300);
+    return j;
+  });
+  cola = p.catch(() => {});
+  return p;
 }
+function iniciar() { post('start', {movil: window.innerWidth < 800}); }
 async function terminar() {
   const j = await post('done');
   if (j.ok) alert('Sesión guardada (' + j.cookies + ' cookies). El bot se reinicia solo.');
 }
-function escribir() {
-  const el = document.getElementById('texto');
-  post('type', {texto: el.value}); el.value = '';
-}
 function tecla(t) { post('key', {tecla: t}); }
+
+// Al tocar la imagen: clic en el servidor y se abre el teclado del dispositivo.
 img.addEventListener('click', e => {
   const r = img.getBoundingClientRect();
+  if (!img.naturalWidth) return;
   const x = (e.clientX - r.left) * img.naturalWidth / r.width;
   const y = (e.clientY - r.top) * img.naturalHeight / r.height;
   post('click', {x, y});
+  kb.style.left = (e.clientX - r.left) + 'px';
+  kb.style.top = (e.clientY - r.top) + 'px';
+  kb.value = CENTINELA;
+  kb.focus({preventScroll: true});
 });
+kb.addEventListener('focus', () => { marco.classList.add('activo'); document.getElementById('kbd').textContent = '⌨ Teclado conectado'; });
+kb.addEventListener('blur', () => { marco.classList.remove('activo'); document.getElementById('kbd').textContent = ''; });
+
+kb.addEventListener('keydown', e => {
+  if (ESPECIALES.includes(e.key)) { e.preventDefault(); tecla(e.key); }
+});
+let componiendo = false;
+kb.addEventListener('compositionstart', () => { componiendo = true; });
+kb.addEventListener('compositionend', () => { componiendo = false; procesar(); });
+kb.addEventListener('input', () => { if (!componiendo) procesar(); });
+// El centinela permite detectar "borrar" en teclados de celular, que no avisan la tecla.
+function procesar() {
+  const v = kb.value;
+  if (v.length < CENTINELA.length) tecla('Backspace');
+  else if (v.startsWith(CENTINELA) && v.length > CENTINELA.length) post('type', {texto: v.slice(CENTINELA.length)});
+  kb.value = CENTINELA;
+  kb.setSelectionRange(CENTINELA.length, CENTINELA.length);
+}
+
+function dominio(u) { try { return new URL(u).hostname || u.slice(0, 40); } catch { return u.slice(0, 40); } }
+let timer = null;
+function pedirCaptura(ms) { clearTimeout(timer); timer = setTimeout(refrescar, ms); }
 async function refrescar() {
   try {
     const e = await (await fetch('/login/estado')).json();
     document.getElementById('estado').textContent =
       (e.loginMode ? '🔐 Modo login activo' : (e.ready ? '✅ Bot funcionando' : '⏳ Bot sin sesión / arrancando')) +
-      (e.url ? ' — ' + e.url : '');
-    const nueva = new Image();
-    nueva.onload = () => { img.src = nueva.src; };
-    nueva.src = '/login/ss?t=' + Date.now();
+      (e.url ? ' — ' + dominio(e.url) : '');
+    await new Promise(ok => {
+      const nueva = new Image();
+      nueva.onload = () => { img.src = nueva.src; ok(); };
+      nueva.onerror = ok;
+      nueva.src = '/login/ss?t=' + Date.now();
+    });
   } catch {}
-  setTimeout(refrescar, 1200);
+  pedirCaptura(1200);
 }
 refrescar();
 </script>

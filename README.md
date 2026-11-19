@@ -71,8 +71,9 @@ En lugar de exportar y subir `cookies.json`, puedes iniciar sesión directamente
 1. En `.env` pon `LOGIN_PASSWORD=una-contraseña-larga` y reinicia el bot.
 2. Abre `http://IP_DEL_SERVIDOR:PUERTO/login` desde el celular o la PC (usuario: cualquiera, contraseña: `LOGIN_PASSWORD`).
 3. Pulsa **Iniciar login**. Verás la pantalla del navegador del servidor:
-   - Toca un campo en la imagen, escribe en la caja de texto y pulsa **Enviar texto**.
-   - Usa los botones Enter / Tab / Borrar cuando haga falta (también sirve para el código de verificación en dos pasos).
+   - Toca un campo en la imagen y escribe directo con el teclado del celular o de la PC.
+   - También hay botones Enter / Tab / Borrar / Esc (sirve igual para el código de verificación en dos pasos).
+   - En el celular la pantalla del servidor se ajusta a un ancho menor para que el formulario se vea grande.
 4. Cuando ya veas tus chats, pulsa **Ya inicié sesión: guardar**. La sesión se guarda en `cookies.json` y el bot se reinicia solo.
 
 Cuando la sesión expire, el bot te avisa por WhatsApp y solo tienes que repetir estos pasos.

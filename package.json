@@ -9,11 +9,11 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "axios": "^1.6.0",
     "dotenv": "^16.4.0",
     "express": "^4.22.2",
-    "groq-sdk": "^0.5.0",
     "puppeteer": "^25.7.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0"

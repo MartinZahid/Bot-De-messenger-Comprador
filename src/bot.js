@@ -2,7 +2,7 @@
 
 const state = require('./state');
 const {
-  POLL_MS, IDLE_MS, GROQ_MODEL, BATCH_SIZE,
+  POLL_MS, IDLE_MS, AI_MODEL, BATCH_SIZE,
   SEL, sleep, rnd, hash, esAvisoSeguridad,
 } = require('./config');
 const { iniciarBrowser, cerrarDialogos, reiniciarBrowser, detectarSesionExpirada, guardarCookies } = require('./browser');
@@ -370,7 +370,7 @@ async function start() {
         await cicloPrincipal();
         programarSiguiente();
         const modo = state.idle ? `${IDLE_MS / 1000}s (reposo)` : `${POLL_MS / 1000}s (activo)`;
-        console.log(`⏱ Monitor iniciado (modo: ${modo}) usando ${GROQ_MODEL || 'default'} | batch: ${BATCH_SIZE}`);
+        console.log(`⏱ Monitor iniciado (modo: ${modo}) usando ${AI_MODEL || 'default'} | batch: ${BATCH_SIZE}`);
       }, 3000);
       return true;
     } catch (err) {

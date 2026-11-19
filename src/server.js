@@ -2,7 +2,7 @@
 
 const express = require('express');
 const state = require('./state');
-const { PORT, GROQ_MODEL, hash } = require('./config');
+const { PORT, AI_MODEL, hash } = require('./config');
 const { obtenerConversaciones } = require('./messenger');
 const { enviarAlerta } = require('./whatsapp');
 
@@ -14,7 +14,7 @@ const app = express();
 app.get('/', (_req, res) => {
   res.json({
     estado: state.ready ? 'online' : 'starting',
-    modelo_groq: GROQ_MODEL,
+    modelo_ia: AI_MODEL,
     conversaciones_rastreadas: state.processed.size,
     historiales_activos: state.historial.size,
     ultimo_ciclo: new Date().toISOString(),

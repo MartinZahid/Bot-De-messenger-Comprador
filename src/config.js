@@ -11,8 +11,9 @@ const COOKIES_PATH = path.join(__dirname, '..', 'cookies.json');
 const WHATSAPP_TO = process.env.WHATSAPP_TO ? (process.env.WHATSAPP_TO.includes('@') ? process.env.WHATSAPP_TO : process.env.WHATSAPP_TO.replace(/[^\d]/g, '')) : null;
 const WHATSAPP_NUMBER = process.env.WHATSAPP_NUMBER ? process.env.WHATSAPP_NUMBER.replace(/[^\d]/g, '') : null;
 const CONTACTO_NUMERO = process.env.CONTACTO_NUMERO || '';
-const GROQ_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+// Claude Haiku 5.5: el modelo de Claude más barato ($0.10 / $0.50 por millón de tokens).
+const AI_MODEL = process.env.AI_MODEL || 'claude-haiku-5-5';
 const MAX_HISTORIAL = 10;
 const MAX_MESSAGES_SCRAPED = 15;
 const BATCH_SIZE = 3;
@@ -194,7 +195,7 @@ const hash = s => {
 
 module.exports = {
   PORT, POLL_MS, IDLE_MS, COOKIES_PATH, WHATSAPP_TO, WHATSAPP_NUMBER, CONTACTO_NUMERO,
-  GROQ_KEY, GROQ_MODEL,
+  ANTHROPIC_KEY, AI_MODEL,
   MAX_HISTORIAL, MAX_MESSAGES_SCRAPED, BATCH_SIZE,
   GROQ_BACKOFF_BASE_MS, GROQ_BACKOFF_MAX_MS, GROQ_MAX_RETRIES,
   SEL, SISTEMA, SISTEMA_AVISOS, esAvisoSeguridad, SYSTEM_PROMPT, BUSINESS_RULES, DECISION_RULES, FORMAT_INSTRUCTIONS,
